@@ -235,7 +235,7 @@ func add_resource(type: int, amount: int) -> int:
 	var current: int = storage.get(type, 0)
 	var max_cap: int = get_max_storage_per_type(type)
 	if max_cap <= 0:
-	    # WHY: 返回0代表容量不可用（当前建筑配置下不允许存储该类型）
+		# WHY: 返回0代表容量不可用（当前建筑配置下不允许存储该类型）
 		return 0
 		
 	var space: int = max_cap - current

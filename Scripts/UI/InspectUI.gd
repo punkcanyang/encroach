@@ -138,9 +138,10 @@ func _process(delta: float) -> void:
 			_info_panel.visible = false
 
 
-func _input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_U:
+			print("InspectUI: 发现按下 [U] 键，正尝试升级悬停建筑...")
 			_try_upgrade_hovered_building()
 			
 
@@ -163,11 +164,14 @@ func _try_upgrade_hovered_building() -> void:
 		return # 不可升级
 		
 	var next_type: int = UPGRADE_MAP[current_type]
+	print("InspectUI: 目标允许升级！类型 %d -> %d。正在触发 PlayerController..." % [current_type, next_type])
 	
 	# 调用 Controller 实现升级
 	var controller = get_node_or_null("/root/World/PlayerController")
 	if controller != null and controller.has_method("upgrade_building"):
 		controller.upgrade_building(_hovered_object, next_type)
+	else:
+		push_warning("InspectUI: 无法找到 PlayerController 或 upgrade_building 方法缺失")
 
 
 ## 检查鼠标悬停

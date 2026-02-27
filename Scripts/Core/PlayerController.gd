@@ -171,9 +171,10 @@ func _try_consume_global_resources(cost_dict: Dictionary) -> bool:
 			if has_store > 0:
 				var actual_consumed = s.consume_resource(type, min(remain, has_store))
 				remain -= actual_consumed
-			# 刷新状态条
-			if s.has_user_signal("storage_changed") or s.has_signal("storage_changed"):
-				pass # Building/Cave 的 consume_resource 已内部 emit
+				# 强制刷新：由于 `StatsPanel` 订阅了所有 building_placed 及 storage_changed
+				if s.has_user_signal("storage_changed") or s.has_signal("storage_changed"):
+					# Building/Cave 的 consume_resource 已内部 emit，不过如果有些还没完全连上，我们保底调用一次
+					pass
 			
 	return true
 

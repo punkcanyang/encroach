@@ -270,12 +270,18 @@ func _refresh_resource_stats() -> void:
 				_max_storage_caps[t] = _cave.get_max_storage_per_type(t)
 				_cave_storage[t] = _cave.storage.get(t, 0)
 				
-	# 叠加建筑内的资源库
+	# 叠加建筑内的资源库与仓储上限
 	var world_node = get_tree().root.get_node_or_null("World")
 	if world_node != null:
 		var bm = world_node.get_node_or_null("BuildingManager")
 		if bm != null and bm.has_method("get_all_buildings"):
 			for b in bm.get_all_buildings():
+				# 累加上限
+				if b.has_method("get_max_storage_for_type"):
+					for t in ResourceTypes.get_all_types():
+						_max_storage_caps[t] = _max_storage_caps.get(t, 0) + b.get_max_storage_for_type(t)
+				
+				# 累加库存
 				if "storage" in b and b.storage is Dictionary:
 					for t in b.storage.keys():
 						_cave_storage[t] = _cave_storage.get(t, 0) + b.storage[t]
