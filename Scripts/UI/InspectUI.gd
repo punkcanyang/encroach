@@ -17,6 +17,13 @@ extends Control
 ## 面板固定尺寸
 const PANEL_SIZE: Vector2 = Vector2(250, 180)
 
+## 建筑升级路线图: [旧BuildingType] -> [新BuildingType]
+## 4(CAVE)->1(WOODEN_HUT)->2(STONE_HOUSE)->3(RESIDENCE)
+const UPGRADE_MAP: Dictionary = {
+	4: 1,
+	1: 2,
+	2: 3
+}
 
 ## UI 节点引用
 var _info_panel: Panel = null
@@ -129,6 +136,38 @@ func _process(delta: float) -> void:
 		_hover_timer = 0.0
 		if _info_panel.visible:
 			_info_panel.visible = false
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_U:
+			_try_upgrade_hovered_building()
+			
+
+func _try_upgrade_hovered_building() -> void:
+	if _hovered_object == null or not is_instance_valid(_hovered_object): return
+	
+	if not _is_hovering or not _info_panel.visible: return
+	
+	# 只处理特定包含 building_type 的对象 (且非施工状态)
+	var current_type: int = -1
+	var is_blueprint: bool = false
+	if "building_type" in _hovered_object:
+		current_type = _hovered_object.building_type
+	if "is_blueprint" in _hovered_object:
+		is_blueprint = _hovered_object.is_blueprint
+		
+	if is_blueprint or current_type == -1: return
+	
+	if not UPGRADE_MAP.has(current_type):
+		return # 不可升级
+		
+	var next_type: int = UPGRADE_MAP[current_type]
+	
+	# 调用 Controller 实现升级
+	var controller = get_node_or_null("/root/World/PlayerController")
+	if controller != null and controller.has_method("upgrade_building"):
+		controller.upgrade_building(_hovered_object, next_type)
 
 
 ## 检查鼠标悬停
@@ -252,9 +291,12 @@ func _format_cave_info(status: Dictionary) -> String:
 		text += "%s %s: %d/%d\n" % [icon, type_name, amount, max_storage]
 	
 	if status.get("can_spawn_human", false):
-		text += tr("UI_CAN_REPRODUCE")
+		text += tr("UI_CAN_REPRODUCE") + "\n"
 	else:
-		text += tr("UI_CANNOT_REPRODUCE")
+		text += tr("UI_CANNOT_REPRODUCE") + "\n"
+		
+	# WHY: 追加升级提示
+	text += _get_upgrade_hint(status.get("building_type", 4))
 	
 	return text
 
@@ -306,7 +348,30 @@ func _format_building_info(status: Dictionary) -> String:
 		if s > 0:
 			text += "📦 提供储物上限: +%d\n" % s
 			
+		text += _get_upgrade_hint(status.get("building_type", 0))
+			
 	return text
+
+
+func _get_upgrade_hint(current_type: int) -> String:
+	if not UPGRADE_MAP.has(current_type):
+		return ""
+		
+	var next_type = UPGRADE_MAP[current_type]
+	var bm = get_node_or_null("/root/World/BuildingManager")
+	if bm == null or not bm.has_method("get_building_data"): return ""
+	
+	var data = bm.get_building_data(next_type)
+	if data.is_empty(): return ""
+	
+	var cost_hint = ""
+	var cost_dict = data.get("cost", {})
+	for rc in cost_dict:
+		var rc_name = tr(ResourceTypes.get_type_name(rc))
+		cost_hint += "%sx%d " % [rc_name, cost_dict[rc]]
+		
+	var next_name = tr(data.get("name", "Unknown"))
+	return "\n⭐ 按 [U] 升级为 [%s]*\n   花费: %s" % [next_name, cost_hint.strip_edges()]
 
 
 ## 显示检视信息

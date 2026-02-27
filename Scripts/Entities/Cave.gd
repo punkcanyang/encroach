@@ -108,24 +108,11 @@ func get_max_population() -> int:
 ## 动态计算当前全局指定资源储存上限
 ## 包含山洞基础上限 + 所有已竣工的住所提供的上限，并校验许可存储项
 func get_max_storage_per_type(type: int) -> int:
-	var total_cap: int = 0
-	
-	# 始祖山洞保底能存 Food 和 Dirt
+	# 始祖山洞保底能存 Food 和 Dirt，上限100。如果后续升到木屋就不走这个了。
 	if type == ResourceTypes.Type.FOOD or type == ResourceTypes.Type.DIRT:
-		total_cap += BASE_MAX_STORAGE_PER_TYPE
+		return BASE_MAX_STORAGE_PER_TYPE
 		
-	var world = get_node_or_null("/root/World")
-	if world != null:
-		var bm = world.get_node_or_null("BuildingManager")
-		if bm != null and bm.has_method("get_all_buildings"):
-			for building in bm.get_all_buildings():
-				if "building_type" in building and bm.has_method("get_building_data"):
-					var data = bm.get_building_data(building.building_type)
-					var allowed: Array = data.get("allowed_storage", [])
-					if type in allowed:
-						total_cap += data.get("storage_cap", 0)
-					
-	return total_cap
+	return 0
 
 
 func _connect_to_systems() -> void:

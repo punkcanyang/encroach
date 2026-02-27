@@ -26,6 +26,10 @@ var _cave: Node2D = null
 var _current_population: int = 0
 var _cave_max_population: int = 6
 var _current_days: int = 0
+
+## 按钮组状态
+var _speed_buttons: Array[Button] = []
+var _speed_scale_map: Dictionary = {}
 ## WHY: 按类型存储山洞库存与类型上限
 var _cave_storage: Dictionary = {}
 var _max_storage_caps: Dictionary = {}
@@ -120,25 +124,30 @@ func _setup_time_controls(parent: Control) -> void:
 	time_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(time_box)
 	
-	var btn_pause = _create_speed_button("⏸", "暂停", 0.0)
-	var btn_slow = _create_speed_button("▶", "慢速", 0.5)
-	var btn_normal = _create_speed_button("▶▶", "正常", 1.0)
-	var btn_fast = _create_speed_button("▶▶▶", "加速", 2.0)
+	_speed_buttons.clear()
+	_speed_scale_map.clear()
 	
-	time_box.add_child(btn_pause)
-	time_box.add_child(btn_slow)
-	time_box.add_child(btn_normal)
-	time_box.add_child(btn_fast)
+	_create_speed_button("⏸", "暂停[0.0x]", 0.0, time_box)
+	_create_speed_button("▶", "慢速[0.5x]", 0.5, time_box)
+	_create_speed_button("▶▶", "正常[1.0x]", 1.0, time_box)
+	_create_speed_button("▶▶▶", "加速[2.0x]", 2.0, time_box)
+
+	_update_speed_buttons_highlight()
 
 
-func _create_speed_button(text: String, tooltip: String, speed_scale: float) -> Button:
+func _create_speed_button(text: String, tooltip: String, speed_scale: float, parent: Control) -> void:
 	var btn = Button.new()
 	btn.text = text
 	btn.tooltip_text = tooltip
 	btn.custom_minimum_size = Vector2(35, 25)
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	btn.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	
 	btn.pressed.connect(func(): _on_speed_button_pressed(speed_scale))
-	return btn
+	
+	parent.add_child(btn)
+	_speed_buttons.append(btn)
+	_speed_scale_map[btn] = speed_scale
 
 
 func _on_speed_button_pressed(speed_scale: float) -> void:
@@ -153,6 +162,21 @@ func _on_speed_button_pressed(speed_scale: float) -> void:
 			print("StatsPanel: 游戏速度调整为 %.1fx" % speed_scale)
 	else:
 		Engine.time_scale = speed_scale
+		
+	_update_speed_buttons_highlight()
+
+
+func _update_speed_buttons_highlight() -> void:
+	var current_scale: float = Engine.time_scale
+	for btn in _speed_buttons:
+		var scale_val = _speed_scale_map[btn]
+		# 浮点数极小误差比较
+		if abs(current_scale - scale_val) < 0.01:
+			btn.add_theme_color_override("font_color", Color(0.2, 1.0, 0.4)) # 高亮绿
+			btn.flat = false
+		else:
+			btn.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6)) # 灰暗
+			btn.flat = true
 
 
 func _setup_connections() -> void:
