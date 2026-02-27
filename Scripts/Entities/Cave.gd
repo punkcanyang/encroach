@@ -9,7 +9,7 @@ extends Node2D
 
 
 ## 信号：当任意资源储存量变化时发射
-signal storage_changed(resource_type: int, new_amount: int)
+signal storage_changed(building: Node2D, resource_type: int, new_amount: int)
 
 ## 信号：当某类资源储存满时发射
 signal storage_full(resource_type: int)
@@ -208,7 +208,7 @@ func _try_spawn_human() -> void:
 
 	# 扣除食物
 	storage[ResourceTypes.Type.FOOD] -= FOOD_COST_PER_HUMAN
-	storage_changed.emit(ResourceTypes.Type.FOOD, storage[ResourceTypes.Type.FOOD])
+	storage_changed.emit(self , ResourceTypes.Type.FOOD, storage[ResourceTypes.Type.FOOD])
 
 	var spawn_offset: Vector2 = Vector2(randf_range(-30, 30), randf_range(-30, 30))
 	var spawn_position: Vector2 = global_position + spawn_offset
@@ -223,7 +223,7 @@ func _try_spawn_human() -> void:
 	else:
 		# 生成失败，返还食物
 		storage[ResourceTypes.Type.FOOD] += FOOD_COST_PER_HUMAN
-		storage_changed.emit(ResourceTypes.Type.FOOD, storage[ResourceTypes.Type.FOOD])
+		storage_changed.emit(self , ResourceTypes.Type.FOOD, storage[ResourceTypes.Type.FOOD])
 		spawn_failed.emit("AgentManager 生成失败")
 
 
@@ -248,7 +248,7 @@ func add_resource(type: int, amount: int) -> int:
 
 	var actual: int = min(amount, space)
 	storage[type] = current + actual
-	storage_changed.emit(type, storage[type])
+	storage_changed.emit(self , type, storage[type])
 
 	if actual < amount:
 		storage_full.emit(type)
@@ -273,7 +273,7 @@ func consume_resource(type: int, amount: int) -> int:
 
 	var actual: int = min(amount, current)
 	storage[type] = current - actual
-	storage_changed.emit(type, storage[type])
+	storage_changed.emit(self , type, storage[type])
 
 	queue_redraw()
 	return actual

@@ -80,26 +80,12 @@ func _try_place_building() -> void:
 	if _building_manager == null or _camera == null:
 		return
 		
-	var cave = get_node_or_null("/root/World/Cave")
-	if cave == null:
-		push_error("PlayerController: 未找到山洞引用，无法执行资源扣除。")
-		return
-		
 	var data = _building_manager.get_building_data(current_build_type)
 	var cost_dict: Dictionary = data.get("cost", {})
 	
-	# 检查资源是否充足
-	for type in cost_dict:
-		var required = cost_dict[type]
-		var owned = cave.storage.get(type, 0)
-		if owned < required:
-			print("PlayerController: 资源不足！需要 %s x%d，当前只有 %d" % [ResourceTypes.get_type_name(type), required, owned])
-			# TODO: 添加游戏内 UI 悬浮提示框供未来的进一步打磨
-			return
-			
-	# 执行真实扣除
-	for type in cost_dict:
-		cave.consume_resource(type, cost_dict[type])
+	if not _try_consume_global_resources(cost_dict):
+		print("PlayerController: 资源不足！无法放置蓝图")
+		return
 	
 	var mouse_pos = _camera.get_global_mouse_position()
 	
@@ -117,6 +103,79 @@ func enter_build_mode(type: int) -> void:
 	print("PlayerController: 进入建造模式，类型 %d" % type)
 	
 	# 修改鼠标指针或通知 UI（未来实现）
+
+
+func upgrade_building(old_building: Node2D, next_type: int) -> void:
+	if _building_manager == null or not is_instance_valid(old_building): return
+	
+	var data = _building_manager.get_building_data(next_type)
+	if data.is_empty(): return
+	
+	var cost_dict: Dictionary = data.get("cost", {})
+	if not _try_consume_global_resources(cost_dict):
+		print("PlayerController: 资源不足！无法升级建筑")
+		return
+		
+	var target_pos = old_building.global_position
+	
+	# 开始接管原内部储存
+	var old_storage: Dictionary = {}
+	if "storage" in old_building and old_building.storage is Dictionary:
+		old_storage = old_building.storage.duplicate()
+		
+	# 移除旧实体
+	_building_manager.remove_building(old_building)
+	
+	# 原理生成升阶蓝图
+	var new_bp = _building_manager.place_building(next_type, target_pos, false)
+	if new_bp != null:
+		# 强制把旧储物塞入新蓝图底层肚子，等竣工后即可直接取用（或在蓝图期也能查阅）
+		if "storage" in new_bp:
+			new_bp.storage = old_storage
+		print("PlayerController: 发起原址建筑升级至 %d" % next_type)
+
+
+func _try_consume_global_resources(cost_dict: Dictionary) -> bool:
+	if cost_dict.is_empty(): return true
+	
+	var bm = get_node_or_null("/root/World/BuildingManager")
+	var cave = get_node_or_null("/root/World/Cave")
+	var storages: Array[Node2D] = []
+	if cave != null: storages.append(cave)
+	if bm != null and bm.has_method("get_all_buildings"):
+		var all_b = bm.get_all_buildings()
+		storages.append_array(all_b)
+		
+	# 1. 预检查全图余量
+	for type in cost_dict:
+		var req = cost_dict[type]
+		var total_owned = 0
+		for s in storages:
+			if "storage" in s and s.storage.has(type):
+				total_owned += s.storage[type]
+		if total_owned < req:
+			print("PlayerController: 缺乏 %s, 需 %d 实有 %d" % [ResourceTypes.get_type_name(type), req, total_owned])
+			return false
+			
+	# 2. 真实扣除
+	for type in cost_dict:
+		var remain: int = cost_dict[type]
+		for s in storages:
+			if remain <= 0: break
+			if not s.has_method("consume_resource"): continue
+			
+			var has_store = 0
+			if "storage" in s and s.storage.has(type):
+				has_store = s.storage[type]
+				
+			if has_store > 0:
+				var actual_consumed = s.consume_resource(type, min(remain, has_store))
+				remain -= actual_consumed
+			# 刷新状态条
+			if s.has_user_signal("storage_changed") or s.has_signal("storage_changed"):
+				pass # Building/Cave 的 consume_resource 已内部 emit
+			
+	return true
 
 
 func exit_build_mode() -> void:

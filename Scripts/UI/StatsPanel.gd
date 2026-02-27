@@ -248,7 +248,7 @@ func _on_building_storage_changed(_building: Node2D, _type: int, _new_amount: in
 	_update_displays()
 
 
-func _on_storage_changed(_type: int, _new_amount: int) -> void:
+func _on_storage_changed(_building: Node2D, _type: int, _new_amount: int) -> void:
 	_refresh_resource_stats()
 	_update_displays()
 

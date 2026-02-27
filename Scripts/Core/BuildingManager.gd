@@ -188,7 +188,7 @@ func place_building(type: int, position: Vector2, is_instant: bool = false) -> N
 	var placement_rect: Rect2 = Rect2(position - size / 2.0, size)
 	
 	if check_collision(placement_rect):
-		print("BuildingManager: 放置失败，位置产生碰撞 %s" % str(position))
+		print("BuildingManager: 放置失败，位置产生碰撞 %s，矩形: %s" % [str(position), str(placement_rect)])
 		return null
 		
 	var scene_path: String = data.get("scene_path", "")
@@ -210,6 +210,9 @@ func place_building(type: int, position: Vector2, is_instant: bool = false) -> N
 	building.position = position
 	if "building_type" in building:
 		building.building_type = type
+		
+	# 确保生成的名称唯一以防止节点树同级冲突和引用混乱
+	building.name = "%s_%d" % [data.get("id", "Building"), Time.get_ticks_msec()]
 		
 	add_child(building)
 	

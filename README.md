@@ -1,4 +1,5 @@
 # Encroach
+![image](assets/encroach_cover.png)
 
 "Encroach is a systemic simulation of human expansion, driven not by commands, but by conditions."
 
