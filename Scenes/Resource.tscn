@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://c8yvxg3ulq3a"]
+
+[ext_resource type="Script" path="res://Scripts/Entities/Resource.gd" id="1_abc123"]
+
+[node name="Resource" type="Node2D"]
+script = ExtResource("1_abc123")
+resource_type = 0
+amount = 10
+max_amount = 100
+difficulty = 1
+collection_radius = 30.0

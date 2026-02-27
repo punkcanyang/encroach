@@ -1,0 +1,125 @@
+[gd_scene format=3 uid="uid://settingsui001"]
+
+[ext_resource type="Script" path="res://Scripts/UI/SettingsUI.gd" id="1_stt001"]
+
+[node name="SettingsUI" type="Control"]
+process_mode = 3
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_stt001")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -250.0
+offset_right = 200.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TitleLabel" type="Label" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 20.0
+offset_bottom = 50.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 24
+text = "游戏设置"
+horizontal_alignment = 1
+
+[node name="WindowModeButton" type="Button" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 30.0
+offset_top = 80.0
+offset_right = -30.0
+offset_bottom = 120.0
+grow_horizontal = 2
+text = "显示模式: 窗口化"
+
+[node name="ResolutionLabel" type="Label" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 30.0
+offset_top = 140.0
+offset_right = -30.0
+offset_bottom = 165.0
+grow_horizontal = 2
+text = "分辨率:"
+
+[node name="ResolutionOption" type="OptionButton" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 30.0
+offset_top = 170.0
+offset_right = -30.0
+offset_bottom = 210.0
+grow_horizontal = 2
+
+[node name="SpeedLabel" type="Label" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 30.0
+offset_top = 230.0
+offset_right = -30.0
+offset_bottom = 255.0
+grow_horizontal = 2
+text = "游戏速度:"
+
+[node name="SpeedSlider" type="HSlider" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 30.0
+offset_top = 260.0
+offset_right = -80.0
+offset_bottom = 290.0
+grow_horizontal = 2
+
+[node name="SpeedValueLabel" type="Label" parent="Panel"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -70.0
+offset_top = 260.0
+offset_right = -30.0
+offset_bottom = 290.0
+grow_horizontal = 0
+text = "1.0x"
+horizontal_alignment = 2
+
+[node name="CloseButton" type="Button" parent="Panel"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 30.0
+offset_top = -60.0
+offset_right = -30.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "关闭"
+
+[connection signal="pressed" from="Panel/WindowModeButton" to="." method="_on_window_mode_button_pressed"]
+[connection signal="item_selected" from="Panel/ResolutionOption" to="." method="_on_resolution_option_item_selected"]
+[connection signal="drag_ended" from="Panel/SpeedSlider" to="." method="_on_speed_slider_drag_ended"]
+[connection signal="value_changed" from="Panel/SpeedSlider" to="." method="_on_speed_slider_value_changed"]
+[connection signal="pressed" from="Panel/CloseButton" to="." method="_on_close_button_pressed"]

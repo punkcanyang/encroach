@@ -1,0 +1,41 @@
+[gd_scene load_steps=2 format=3 uid="uid://cw7c5frslpiyy"]
+
+[ext_resource type="Script" uid="uid://b58ukr3ttbr73" path="res://Scripts/UI/InspectUI.gd" id="1_ins001"]
+
+[node name="InspectUI" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_ins001")
+inspect_delay = 0.3
+
+[node name="InfoPanel" type="Panel" parent="."]
+visible = false
+layout_mode = 0
+offset_right = 250.0
+offset_bottom = 180.0
+mouse_filter = 2
+
+[node name="TitleLabel" type="Label" parent="InfoPanel"]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 242.0
+offset_bottom = 30.0
+theme_override_font_sizes/font_size = 14
+text = "物件信息"
+horizontal_alignment = 1
+
+[node name="ContentLabel" type="Label" parent="InfoPanel"]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 34.0
+offset_right = 242.0
+offset_bottom = 172.0
+theme_override_font_sizes/font_size = 12
+text = "内容"
+autowrap_mode = 2

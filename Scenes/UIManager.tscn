@@ -1,0 +1,16 @@
+[gd_scene load_steps=5 format=3 uid="uid://uimanager001"]
+
+[ext_resource type="Script" path="res://Scripts/UI/UIManager.gd" id="1_uim001"]
+[ext_resource type="PackedScene" uid="uid://settingsui001" path="res://Scenes/SettingsUI.tscn" id="2_stt001"]
+[ext_resource type="PackedScene" uid="uid://cw7c5frslpiyy" path="res://Scenes/InspectUI.tscn" id="3_ins001"]
+[ext_resource type="PackedScene" path="res://Scenes/BuildUI.tscn" id="4_bui001"]
+
+[node name="UIManager" type="CanvasLayer"]
+process_mode = 3
+script = ExtResource("1_uim001")
+
+[node name="SettingsUI" parent="." instance=ExtResource("2_stt001")]
+
+[node name="InspectUI" parent="." instance=ExtResource("3_ins001")]
+
+[node name="BuildUI" parent="." instance=ExtResource("4_bui001")]

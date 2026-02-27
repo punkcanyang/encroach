@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://dy7e17i43m5aa"]
+
+[ext_resource type="Script" path="res://Scripts/Entities/HumanAgent.gd" id="1_human"]
+
+[node name="HumanAgent" type="Node2D"]
+script = ExtResource("1_human")

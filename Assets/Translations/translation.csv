@@ -1,0 +1,53 @@
+keys,en,zh
+UI_FULLSCREEN,Fullscreen,全荧幕
+UI_WINDOWED,Windowed,无边框窗口
+UI_DISPLAY_MODE,Display Mode: %s,显示模式: %s
+UI_SPEED_MULTI,Speed: %.1fx,速度: %.1fx
+UI_AGE,Age: %d y %d d,年龄: %d岁%d天
+UI_LIFESPAN,Lifespan: %d y,寿命: %d岁
+UI_HUNGER,Hunger: %.1f/100,饥饿: %.1f/100
+UI_STATE,State: %s,状态: %s
+UI_CARRIED_RESOURCE,Carries: %d %s,携带: %d %s
+UI_STORED_FOOD,Food: %d/%d,食物: %d/%d
+UI_STORAGE_PERCENT,Storage: %d%%,储存率: %d%%
+UI_CAN_REPRODUCE,✓ Can reproduce,✓ 可以繁殖
+UI_CANNOT_REPRODUCE,✗ Not enough food (needs 50),✗ 食物不足（需要50）
+UI_AMOUNT,Amount: %d/%d,储量: %d/%d
+UI_REMAINING,Remaining: %d%%,剩余: %d%%
+UI_DEPLETED,\n⚠ Depleted,\n⚠ 已耗尽
+
+STATE_IDLE,Idle,空闲
+STATE_WANDERING,Wandering,游荡寻找
+STATE_MOVING_TO_RESOURCE,Moving to resource,前往资源
+STATE_COLLECTING,Collecting,采集中
+STATE_MOVING_TO_CAVE,Returning to cave,返回山洞
+STATE_DEPOSITING,Depositing,存入资源
+STATE_UNKNOWN,Unknown,未知
+
+RESOURCE_FOOD,Food,食物
+RESOURCE_DIRT,Dirt Ore,土矿
+RESOURCE_IND_METAL,Industrial Metal,工业金属矿
+RESOURCE_PREC_METAL,Precious Metal,贵金属矿
+RESOURCE_UNKNOWN,Unknown,未知
+
+CAVE_TITLE,Cave,山洞
+HUMAN_TITLE,Human,人类
+RESOURCE_TITLE,Resource,资源
+UI_STATS_TIME,Day %d (Year %d),第 %d 天 (第 %d 年)
+UI_STATS_POPULATION,Population: %d/%d,人口: %d/%d
+UI_STATS_CAVE_FOOD,🍎 %d/%d,🍎 %d/%d
+UI_STATS_CAVE_DIRT,🪨 %d/%d,🪨 %d/%d
+UI_STATS_CAVE_IND_METAL,⚙️ %d/%d,⚙️ %d/%d
+UI_STATS_CAVE_PREC_METAL,💎 %d/%d,💎 %d/%d
+UI_STATS_WILD_RESOURCES,🌿 Wild: %d left,🌿 野外: 剩余 %d 处
+UI_STATS_COLLECTED,📦 Collected: %d,📦 累计采集: %d
+RESOURCE_FARM,Farm,农田
+BUILDING_WOODEN_HUT,Wooden Hut,木屋
+BUILDING_STONE_HOUSE,Stone House,石屋
+BUILDING_RESIDENCE_BUILDING,Building,大楼
+BUILDING_TITLE,Building,建筑
+UI_BUILD_LABEL,Build:,建造:
+UI_BUILD_CANCEL,Cancel,取消
+UI_BUILD_COST,Cost %s: %d,消耗 %s: %d
+UI_BUILD_POP,Pop cap: +%d,人口上限: +%d
+UI_BUILD_STORAGE,Storage: +%d,储物上限: +%d

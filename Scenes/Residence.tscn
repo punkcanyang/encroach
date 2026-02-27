@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://resi001"]
+
+[ext_resource type="Script" path="res://Scripts/Entities/Residence.gd" id="1_resi01"]
+
+[node name="Residence" type="Node2D"]
+script = ExtResource("1_resi01")

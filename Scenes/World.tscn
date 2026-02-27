@@ -1,0 +1,48 @@
+[gd_scene load_steps=10 format=3 uid="uid://b2kllwl6juoxs"]
+
+[ext_resource type="Script" path="res://Scripts/Core/World.gd" id="1_qwe123"]
+[ext_resource type="Script" path="res://Scripts/Core/TimeSystem.gd" id="2_asd456"]
+[ext_resource type="Script" path="res://Scripts/Core/AgentManager.gd" id="3_zxc789"]
+[ext_resource type="Script" path="res://Scripts/Core/BuildingManager.gd" id="4_rty012"]
+[ext_resource type="Script" path="res://Scripts/Core/RuleEvaluator.gd" id="5_fgh345"]
+[ext_resource type="Script" path="res://Scripts/Core/ResourceManager.gd" id="6_jkl678"]
+[ext_resource type="Script" path="res://Scripts/Core/SettingsManager.gd" id="7_mno901"]
+[ext_resource type="Script" path="res://Scripts/Core/WorldGenerator.gd" id="8_pqr234"]
+[ext_resource type="PackedScene" uid="uid://cave001" path="res://Scenes/Cave.tscn" id="9_cave01"]
+[ext_resource type="PackedScene" uid="uid://c8yvxg3ulq3a" path="res://Scenes/Resource.tscn" id="10_res001"]
+[ext_resource type="PackedScene" uid="uid://uimanager001" path="res://Scenes/UIManager.tscn" id="9_uim001"]
+[ext_resource type="Script" path="res://Scripts/Core/PlayerController.gd" id="10_ply001"]
+
+[node name="World" type="Node2D"]
+script = ExtResource("1_qwe123")
+
+[node name="TimeSystem" type="Node" parent="."]
+script = ExtResource("2_asd456")
+seconds_per_tick = 0.5
+ticks_per_day = 10
+
+[node name="AgentManager" type="Node" parent="."]
+script = ExtResource("3_zxc789")
+max_agents = 100
+
+[node name="BuildingManager" type="Node" parent="."]
+script = ExtResource("4_rty012")
+
+[node name="RuleEvaluator" type="Node" parent="."]
+script = ExtResource("5_fgh345")
+
+[node name="ResourceManager" type="Node" parent="."]
+script = ExtResource("6_jkl678")
+
+[node name="SettingsManager" type="Node" parent="."]
+script = ExtResource("7_mno901")
+
+[node name="WorldGenerator" type="Node" parent="."]
+script = ExtResource("8_pqr234")
+cave_scene = ExtResource("9_cave01")
+resource_scene = ExtResource("10_res001")
+
+[node name="UIManager" parent="." instance=ExtResource("9_uim001")]
+
+[node name="PlayerController" type="Node2D" parent="."]
+script = ExtResource("10_ply001")

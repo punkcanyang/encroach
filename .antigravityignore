@@ -1,0 +1,9 @@
+# Godot 4 核心忽略 (绝对不要读取)
+.godot/
+*.import
+*.uid
+export_presets.cfg
+*.test
+
+# macOS 系統檔案
+.DS_Store

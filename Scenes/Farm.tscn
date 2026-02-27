@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://farm001"]
+
+[ext_resource type="Script" path="res://Scripts/Entities/Farm.gd" id="1_farm01"]
+
+[node name="Farm" type="Node2D"]
+script = ExtResource("1_farm01")
