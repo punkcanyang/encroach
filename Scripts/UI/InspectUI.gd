@@ -138,12 +138,21 @@ func _process(delta: float) -> void:
 			_info_panel.visible = false
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_U:
-			print("InspectUI: 发现按下 [U] 键，正尝试升级悬停建筑...")
+	# WHY: 为了绝对防止被 Control 节点吞噬事件，改为轮询扫描 U 键
+	if Input.is_action_just_pressed("ui_accept") or Input.is_key_pressed(KEY_U):
+		if not getattr(self , "_u_pressed_last_frame", false):
+			setattr(self , "_u_pressed_last_frame", true)
+			print("InspectUI [Process]: 扫描到 U 键按下！")
 			_try_upgrade_hovered_building()
-			
+	else:
+		setattr(self , "_u_pressed_last_frame", false)
+
+func getattr(obj, prop: String, default_val):
+	if prop in obj: return obj.get(prop)
+	return default_val
+	
+func setattr(obj, prop: String, val):
+	obj.set(prop, val)
 
 func _try_upgrade_hovered_building() -> void:
 	if _hovered_object == null or not is_instance_valid(_hovered_object): return

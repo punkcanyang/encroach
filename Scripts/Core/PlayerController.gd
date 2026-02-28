@@ -112,8 +112,9 @@ func upgrade_building(old_building: Node2D, next_type: int) -> void:
 	if data.is_empty(): return
 	
 	var cost_dict: Dictionary = data.get("cost", {})
+	print("PlayerController: 准备进入建造与升级消耗判定，花费配置：", cost_dict)
 	if not _try_consume_global_resources(cost_dict):
-		print("PlayerController: 资源不足！无法升级建筑")
+		print("PlayerController: 升级拦截 -> 资源不足！无法升级建筑")
 		return
 		
 	var target_pos = old_building.global_position
@@ -136,6 +137,7 @@ func upgrade_building(old_building: Node2D, next_type: int) -> void:
 
 
 func _try_consume_global_resources(cost_dict: Dictionary) -> bool:
+	print("PlayerController[_try_consume_global_resources]: 请求花费 - ", cost_dict)
 	if cost_dict.is_empty(): return true
 	
 	var bm = get_node_or_null("/root/World/BuildingManager")

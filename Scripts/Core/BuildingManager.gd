@@ -124,6 +124,7 @@ func get_building_data(type: int) -> Dictionary:
 ## 检查指定区域是否有任何物理重叠（返回 true 表示有碰撞，不允许放置）
 func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 	if _world == null:
+		print(" BuildingManager[Collision]: World 不存在")
 		return true # 未初始化前不允许放置
 	
 	# 检查与世界边界的碰撞
@@ -131,6 +132,7 @@ func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 	if generator != null and generator.has_method("get_world_rect"):
 		var world_rect: Rect2 = generator.get_world_rect()
 		if not world_rect.encloses(rect):
+			print(" BuildingManager[Collision]: 越界，候选 %s 不在世界 %s 范围内" % [str(rect), str(world_rect)])
 			return true
 	
 	# 检查与其他建筑的碰撞
@@ -139,6 +141,7 @@ func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 			continue
 		var entity_rect: Rect2 = _get_entity_rect(entity)
 		if rect.intersects(entity_rect):
+			print(" BuildingManager[Collision]: 与其他建筑重叠 -> %s (位置: %s，大小: %s)" % [entity.name, str(entity_rect.position), str(entity_rect.size)])
 			return true
 	
 	# 检查与山洞的碰撞
@@ -146,6 +149,7 @@ func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 	if cave != null and cave != ignore_node and is_instance_valid(cave):
 		var cave_rect: Rect2 = _get_entity_rect(cave)
 		if rect.intersects(cave_rect):
+			print(" BuildingManager[Collision]: 与山洞重叠 -> (位置: %s, 大小: %s)" % [str(cave_rect.position), str(cave_rect.size)])
 			return true
 			
 	# 检查与野生资源的碰撞 (假设大小大概 10x10)
@@ -157,6 +161,7 @@ func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 			# 这是个野生资源
 			var res_rect: Rect2 = Rect2(res.global_position - Vector2(10, 10), Vector2(20, 20))
 			if rect.intersects(res_rect):
+				print(" BuildingManager[Collision]: 与野生资源重叠 -> %s" % res.name)
 				return true
 				
 	return false

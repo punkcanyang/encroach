@@ -276,6 +276,10 @@ func _refresh_resource_stats() -> void:
 		var bm = world_node.get_node_or_null("BuildingManager")
 		if bm != null and bm.has_method("get_all_buildings"):
 			for b in bm.get_all_buildings():
+				# 排除蓝图
+				var is_bp = b.is_blueprint if "is_blueprint" in b else false
+				if is_bp: continue
+				
 				# 累加上限
 				if b.has_method("get_max_storage_for_type"):
 					for t in ResourceTypes.get_all_types():

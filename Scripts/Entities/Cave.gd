@@ -97,7 +97,9 @@ func get_max_population() -> int:
 		var bm = world.get_node_or_null("BuildingManager")
 		if bm != null and bm.has_method("get_all_buildings"):
 			for building in bm.get_all_buildings():
-				if "building_type" in building and bm.has_method("get_building_data"):
+				# 排除蓝图
+				var is_bp = building.is_blueprint if "is_blueprint" in building else false
+				if not is_bp and "building_type" in building and bm.has_method("get_building_data"):
 					var data = bm.get_building_data(building.building_type)
 					total_cap += data.get("pop_cap", 0)
 					

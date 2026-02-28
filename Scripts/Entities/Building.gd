@@ -108,6 +108,8 @@ func _on_construction_finished() -> void:
 
 ## 获取本建筑对应某类型的仓库上限
 func get_max_storage_for_type(type: int) -> int:
+	if is_blueprint: return 0
+	
 	var manager = get_node_or_null("/root/World/BuildingManager")
 	if manager != null and manager.has_method("get_building_data"):
 		var data = manager.get_building_data(building_type)
