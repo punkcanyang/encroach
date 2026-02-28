@@ -17,7 +17,7 @@ signal day_passed(current_day: int)
 @export var seconds_per_tick: float = 0.5
 
 ## 配置参数：多少个 Tick = 1 天
-@export var ticks_per_day: int = 10
+@export var ticks_per_day: int = 3
 
 
 ## 内部状态：当前 Tick 编号（从 1 开始）

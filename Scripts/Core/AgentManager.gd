@@ -63,10 +63,18 @@ func add_agent(position: Vector2, min_lifespan: int = 20, max_lifespan: int = 30
 	
 	# 从外部赋值重写 HumanAgent 的寿命设定
 	agent.lifespan_days = randi_range(min_lifespan, max_lifespan) * 365
+	agent.agent_died.connect(_on_agent_died)
 	
 	agents.append(agent)
 	agent_added.emit(agent)
 	return agent
+
+
+func _on_agent_died(agent: Node2D, _cause: String, _age: int) -> void:
+	# 由 agent 自己去 queue_free 即可，Manager 只负责从数组移除和发事件
+	if agent in agents:
+		agents.erase(agent)
+		agent_removed.emit(agent)
 
 
 func remove_agent(agent: Node2D) -> void:

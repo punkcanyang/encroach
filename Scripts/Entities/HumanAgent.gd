@@ -162,27 +162,50 @@ func _on_day_passed(_current_day: int) -> void:
 
 	# 每天从山洞消耗一次食物
 	if _days_since_last_meal >= 1:
-		_try_consume_food_from_cave()
+		_try_consume_food_from_any_storage()
 
 
 func _apply_hunger_decay() -> void:
 	hunger -= HUNGER_DECAY_PER_TICK
 
 
-func _try_consume_food_from_cave() -> void:
-	if _cave == null:
-		return
+func _try_consume_food_from_any_storage() -> void:
 	var hunger_needed: float = 100.0 - hunger
 	var food_needed: int = ceil(hunger_needed / 10.0)
 
-	if food_needed > 0:
-		var consumed: int = _cave.consume_food(food_needed)
-		if consumed > 0:
-			hunger = min(hunger + (consumed * 10.0), 100.0)
-			_days_since_last_meal = 0
-			print("HumanAgent [%d岁%d天]: 从山洞进食，消耗 %d 食物，饥饿 %.1f" % [
-				age_years, age_days % DAYS_PER_YEAR, consumed, hunger
-			])
+	if food_needed <= 0: return
+
+	var world: Node = get_node_or_null("/root/World")
+	if world == null: return
+	
+	var storages: Array[Node] = []
+	if _cave != null: storages.append(_cave)
+	
+	var bm = world.get_node_or_null("BuildingManager")
+	if bm != null and bm.has_method("get_all_buildings"):
+		storages.append_array(bm.get_all_buildings())
+		
+	var total_consumed: int = 0
+	
+	for s in storages:
+		if is_instance_valid(s) and s.has_method("consume_resource"):
+			var has_store = 0
+			if "storage" in s and s.storage.has(ResourceTypes.Type.FOOD):
+				has_store = s.storage[ResourceTypes.Type.FOOD]
+				
+			if has_store > 0:
+				var attempt = min(food_needed - total_consumed, has_store)
+				var consumed = s.consume_resource(ResourceTypes.Type.FOOD, attempt)
+				total_consumed += consumed
+				if total_consumed >= food_needed:
+					break
+					
+	if total_consumed > 0:
+		hunger = min(hunger + (total_consumed * 10.0), 100.0)
+		_days_since_last_meal = 0
+		print("HumanAgent [%d岁%d天]: 从营地进食，消耗 %d 食物，饥饿 %.1f" % [
+			age_years, age_days % DAYS_PER_YEAR, total_consumed, hunger
+		])
 
 
 func _update_state_machine() -> void:
@@ -255,64 +278,80 @@ func _decide_next_action() -> void:
 		current_state = AgentState.SEEKING_RESOURCE
 
 
-## 判断当前应该采集哪种资源
-## WHY: 综合规则 - 饱腹 >= 80 才采非食物；储满的类型不采
-func _should_collect_type(resource_type: int) -> bool:
-	# 检查山洞对应类型是否已满 → 满了就不采
-	if _cave != null and _cave.is_storage_full_for(resource_type):
-		return false
-
-	if resource_type == ResourceTypes.Type.FOOD:
-		return true
-
-	# 非食物需要饱腹度达标
-	if hunger < HUNGER_THRESHOLD_NON_FOOD:
-		return false
-
-	# WHY: 山洞食物低于 50% 时，优先采食物而非矿物
-	if _cave != null:
-		var food_ratio: float = float(_cave.get_stored(ResourceTypes.Type.FOOD)) / float(_cave.MAX_STORAGE_PER_TYPE)
-		if food_ratio < 0.5:
-			return false
-
-	return true
-
-
+## 预计算并寻找最近的可采集资源（性能优化与新策略）
 func _find_and_move_to_nearest_resource() -> void:
 	var nearest_dist: float = INF
 	_nearest_resource = null
 
-	var world: Node = get_node("/root/World")
-	if world == null:
-		return
+	var world: Node = get_node_or_null("/root/World")
+	if world == null: return
 
-	# WHY: 改为从 inspectable 组查找，这样无论实体挂载在 World 还是 BuildingManager 下都能找到
+	# --- 1. 预计算全局空间与全局食物储备 ---
+	var total_food: int = 0
+	var pop: int = 0
+	
+	var bm = world.get_node_or_null("BuildingManager")
+	var am = world.get_node_or_null("AgentManager")
+	if am != null: pop = am.agents.size()
+	
+	var storages: Array[Node] = []
+	if _cave != null: storages.append(_cave)
+	if bm != null and bm.has_method("get_all_buildings"):
+		storages.append_array(bm.get_all_buildings())
+		
+	# 记录哪些资源类型目前还有存储空间
+	var has_space_for: Dictionary = {}
+	
+	for s in storages:
+		# 跳过蓝图
+		var is_bp = s.is_blueprint if "is_blueprint" in s else false
+		if is_bp: continue
+		
+		# 累加总食物
+		if "storage" in s and s.storage.has(ResourceTypes.Type.FOOD):
+			total_food += s.storage[ResourceTypes.Type.FOOD]
+			
+		# 检查可用空间
+		if s.has_method("get_remaining_space"):
+			for t in ResourceTypes.get_all_types():
+				if not has_space_for.has(t) and s.get_remaining_space(t) > 0:
+					has_space_for[t] = true
+
+	var safe_food_line: int = pop * 15
+	var can_collect_non_food: bool = (hunger >= HUNGER_THRESHOLD_NON_FOOD) and (total_food >= safe_food_line)
+
+	# --- 2. 遍历资源节点寻找最近目标 ---
 	var candidates: Array[Node] = get_tree().get_nodes_in_group("inspectable")
 	
 	for child in candidates:
-		if not child is Node2D:
-			continue
-		if not child.has_method("collect") or not child.has_method("is_depleted"):
-			continue
-		if child.is_depleted():
-			continue
+		if not child is Node2D: continue
+		if not child.has_method("collect") or not child.has_method("is_depleted"): continue
+		if child.is_depleted(): continue
 
 		var res_type: int = child.resource_type if "resource_type" in child else 0
-		if not _should_collect_type(res_type):
+		
+		# 全图无空间存放此资源，跳过
+		if not has_space_for.get(res_type, false):
 			continue
+			
+		# 非食物需满足食物安全线和饱腹度，否则跳过
+		if res_type != ResourceTypes.Type.FOOD:
+			if not can_collect_non_food:
+				continue
 
 		var dist: float = global_position.distance_to(child.global_position)
 		if dist < nearest_dist:
 			nearest_dist = dist
 			_nearest_resource = child
 
+	# --- 3. 指派移动目标 ---
 	if _nearest_resource != null:
 		target_position = _nearest_resource.global_position
 		current_state = AgentState.MOVING_TO_RESOURCE
 	else:
 		# 没有可用资源，随机移动
 		var generator = world.get_node_or_null("WorldGenerator")
-		if generator != null:
+		if generator != null and generator.has_method("_get_random_position_in_world"):
 			target_position = generator._get_random_position_in_world(100.0)
 			current_state = AgentState.MOVING_TO_RESOURCE
 

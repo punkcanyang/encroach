@@ -117,6 +117,12 @@ func get_max_storage_per_type(type: int) -> int:
 	return 0
 
 
+## 兼容 Building 接口
+func get_max_storage_for_type(type: int) -> int:
+	if is_blueprint: return 0
+	return get_max_storage_per_type(type)
+
+
 func _connect_to_systems() -> void:
 	var world: Node = get_node("/root/World")
 	if world == null:
