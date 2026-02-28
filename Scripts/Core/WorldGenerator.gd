@@ -112,7 +112,9 @@ func _generate_world() -> void:
 	print("土矿: %d 处 | 工业金属: %d 处 | 贵金属: %d 处" % [initial_dirt_count, initial_ind_metal_count, initial_prec_metal_count])
 	print("矿物量范围: %d-%d" % [min_mineral_amount, max_mineral_amount])
 	print("初始人口: 1 人")
-	print("时间系统: 10 ticks = 1 天, 365 天 = 1 年")
+	var time_system = get_node_or_null("/root/World/TimeSystem")
+	var ticks = 3 if time_system == null else time_system.ticks_per_day
+	print("时间系统: %d ticks = 1 天, 365 天 = 1 年" % ticks)
 	print("繁殖规则: 每10年(3650天)自动繁殖，消耗50食物")
 	print("消耗速度: 每天从山洞进食一次")
 	print("提示: 鼠标悬停在物件上查看详细信息\n")

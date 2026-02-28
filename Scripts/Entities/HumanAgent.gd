@@ -32,7 +32,7 @@ const HUNGER_THRESHOLD_NON_FOOD: float = 80.0
 const MIN_LIFESPAN_YEARS: int = 20
 const MAX_LIFESPAN_YEARS: int = 30
 const DAYS_PER_YEAR: int = 365
-const MOVE_SPEED: float = 100.0
+const MOVE_SPEED: float = 300.0
 const CARRY_CAPACITY: int = 10
 const COLLECTION_TIME: float = 1.0
 const CAVE_INTERACTION_DISTANCE: float = 50.0
@@ -42,6 +42,10 @@ const CAVE_INTERACTION_DISTANCE: float = 50.0
 var hunger: float = 100.0:
 	set(value):
 		hunger = clamp(value, 0.0, 100.0)
+
+var max_hp: float = 20.0
+var hp: float = 20.0
+
 var age_days: int = 0
 var age_years: int = 0
 var lifespan_days: int = 0
@@ -80,11 +84,29 @@ func _ready() -> void:
 	carried_type = -1
 	carried_amount = 0
 	_target_building = null
+	
+	hp = 20.0
+	max_hp = 20.0
 
 	_connect_to_systems()
 	queue_redraw()
 
 	print("HumanAgent: 出生在位置 %s，预计寿命 %d 岁（%d 天）" % [str(global_position), lifespan_years, lifespan_days])
+
+
+## 被 AgentManager 调用的全局血量同步
+func update_max_hp(new_max: float) -> void:
+	if new_max > max_hp:
+		# 享受涨幅补贴
+		var diff = new_max - max_hp
+		max_hp = new_max
+		hp = min(hp + diff, max_hp)
+		print("HumanAgent [%d岁]: 受到时代建筑光环影响，生命值提升 %d，当前: %d/%d" % [age_years, int(diff), int(hp), int(max_hp)])
+	elif new_max < max_hp:
+		# 有高级建筑被拆除了
+		max_hp = max_hp
+		if hp > max_hp: hp = max_hp
+		print("HumanAgent [%d岁]: 时代衰退，生命值上限降至 %d" % [age_years, int(max_hp)])
 
 
 func _connect_to_systems() -> void:
@@ -160,7 +182,12 @@ func _on_day_passed(_current_day: int) -> void:
 	age_days += 1
 	_days_since_last_meal += 1
 
-	# 每天从山洞消耗一次食物
+	if hunger <= 0.0:
+		hp -= 5.0
+		var display_cause: String = "严重饥饿 (-5 HP)"
+		print("HumanAgent [%d岁%d天]: 遭受 %s，剩余 HP: %d/%d" % [age_years, age_days % DAYS_PER_YEAR, display_cause, int(hp), int(max_hp)])
+
+	# 每天尝试进食
 	if _days_since_last_meal >= 1:
 		_try_consume_food_from_any_storage()
 
@@ -392,7 +419,10 @@ func _collect_resource() -> void:
 
 	var collected: int = 0
 	if _nearest_resource.has_method("collect"):
-		collected = _nearest_resource.collect(CARRY_CAPACITY, self )
+		# 特权设定：如果是具有成长熟练度的建筑（如农田），允许一次性清空其所有存量。
+		# WHY: 防止由于拾取上限卡住建筑的下一次倒计时生成。
+		var request_amount = 99999 if _nearest_resource.is_in_group("building") else CARRY_CAPACITY
+		collected = _nearest_resource.collect(request_amount, self )
 
 	if collected > 0:
 		carried_type = res_type
@@ -435,8 +465,8 @@ func _deposit_to_cave() -> void:
 
 
 func _check_death() -> void:
-	if hunger <= 0.0:
-		_die("starvation")
+	if hp <= 0.0:
+		_die("starvation_hp_depleted")
 		return
 
 	if age_days >= lifespan_days:
@@ -446,7 +476,7 @@ func _check_death() -> void:
 
 func _die(cause: String) -> void:
 	alive = false
-	var cause_text: String = "饿死" if cause == "starvation" else "寿终正寝"
+	var cause_text: String = "饿死(生命值耗尽)" if cause == "starvation_hp_depleted" else "寿终正寝"
 	print("☠️  HumanAgent [%d岁/%d天寿命]: %s" % [age_years, lifespan_days, cause_text])
 
 	agent_died.emit(self , cause, age_years)
@@ -477,6 +507,8 @@ func _get_state_string(state: AgentState) -> String:
 func get_status() -> Dictionary:
 	var status: Dictionary = {}
 	status["hunger"] = hunger
+	status["hp"] = hp
+	status["max_hp"] = max_hp
 	status["age_years"] = age_years
 	status["age_days"] = age_days
 	status["lifespan_years"] = int(float(lifespan_days) / float(DAYS_PER_YEAR))

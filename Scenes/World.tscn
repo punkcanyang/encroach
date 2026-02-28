@@ -19,7 +19,7 @@ script = ExtResource("1_qwe123")
 [node name="TimeSystem" type="Node" parent="."]
 script = ExtResource("2_asd456")
 seconds_per_tick = 0.5
-ticks_per_day = 10
+ticks_per_day = 3
 
 [node name="AgentManager" type="Node" parent="."]
 script = ExtResource("3_zxc789")

@@ -29,6 +29,17 @@ func _ready() -> void:
 		add_child(_stats_panel)
 	else:
 		push_error("UIManager: 无法加载 StatsPanel 脚本")
+		
+	# 创建物件检视面板 InspectUI
+	var inspect_ui = Control.new()
+	inspect_ui.name = "InspectUI"
+	var inspect_script = load("res://Scripts/UI/InspectUI.gd")
+	if inspect_script:
+		inspect_ui.set_script(inspect_script)
+		add_child(inspect_ui)
+		print("UIManager: 成功通过代码动态挂载 InspectUI")
+	else:
+		push_error("UIManager: 无法加载 InspectUI 脚本")
 
 
 ## 处理全局输入

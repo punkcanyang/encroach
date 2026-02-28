@@ -21,8 +21,8 @@ var total_work_count: int = 0
 var resource_type: int = 0
 
 ## 基础参数
-const BASE_GROWTH_RATE: float = 5.0 # 每秒生长基础值
-const BASE_YIELD: int = 20 # 基础产量
+const BASE_GROWTH_RATE: float = 15.0 # 每秒生长基础值
+const BASE_YIELD: int = 150 # 基础产量
 
 
 func _ready() -> void:

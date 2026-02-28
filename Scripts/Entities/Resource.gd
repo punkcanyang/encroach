@@ -50,90 +50,34 @@ const PREC_METAL_COLOR: Color = Color(0.95, 0.8, 0.2) ## 金黄贵金属
 const RESOURCE_SIZE: float = 6.0
 
 
+var _icon_label: Label
+
 func _ready() -> void:
 	add_to_group("inspectable")
-	queue_redraw()
+	
+	# 初始化显示的 Emoji 图标
+	_icon_label = Label.new()
+	_icon_label.text = ResourceTypes.get_type_icon(resource_type)
+	
+	# 根据资源量计算字体缩放大小（200-5000映射）
+	var scale_factor: float = 1.0 + (amount / 5000.0) * 1.5
+	var base_font_size: int = 24
+	_icon_label.add_theme_font_size_override("font_size", int(base_font_size * scale_factor))
+	
+	# 根据类型上色（微调颜色让它不显得过于单调）
+	_icon_label.add_theme_color_override("font_color", _get_resource_color())
+	
+	# 置中计算：将坐标向左上偏移半个字体的宽度
+	_icon_label.position = Vector2(-base_font_size * scale_factor * 0.5, -base_font_size * scale_factor * 0.5)
+	
+	add_child(_icon_label)
+	
 	# 关闭空跑进程以节省性能
 	set_process(false)
 	set_physics_process(false)
 	
-	# print("Resource: 生成 %s 资源，数量: %d，位置: %s" % [
-	# 	_get_type_name(),
-	# 	amount,
-	# 	str(global_position)
-	# ])
-
-
-func _draw() -> void:
-	# 根据资源量调整大小（200-5000范围，映射放大倍数）
-	var current_size: float = RESOURCE_SIZE * (1.0 + (amount / 5000.0) * 2.0)
-	
-	if resource_type == ResourceType.FOOD:
-		_draw_heart(current_size)
-	else:
-		# 矿物统一使用晶体绘制
-		_draw_crystal(current_size, _get_resource_color())
-
-
-## 绘制食物：红色爱心
-func _draw_heart(size: float) -> void:
-	var heart_color: Color = FOOD_COLOR
-	var points = PackedVector2Array([
-		Vector2(0, size * 0.8), # 底部尖刺
-		Vector2(size * 1.2, -size * 0.2), # 右侧宽部
-		Vector2(size * 0.6, -size * 1.0), # 右上圆弧
-		Vector2(0, -size * 0.4), # 凹陷中心
-		Vector2(-size * 0.6, -size * 1.0), # 左上圆弧
-		Vector2(-size * 1.2, -size * 0.2) # 左侧宽部
-	])
-	draw_polygon(points, PackedColorArray([heart_color]))
-	
-	# 白色边线增加质感
-	for i in range(points.size()):
-		var next_i: int = (i + 1) % points.size()
-		draw_line(points[i], points[next_i], Color.WHITE, 1.0)
-
-
-## 绘制矿物：三个方块叠在一起的不规则晶体
-## 由三个倾斜的四边形叠加组成，模拟晶簇效果
-func _draw_crystal(size: float, color: Color) -> void:
-	# 颜色变体：用于不同晶体块产生层次感
-	var dark_color: Color = color.darkened(0.25)
-	var light_color: Color = color.lightened(0.15)
-	
-	# 晶体 1（底部，最大，稍偏左）
-	var crystal_1 = PackedVector2Array([
-		Vector2(-size * 0.8, size * 0.6), # 左下
-		Vector2(-size * 0.3, -size * 1.0), # 左上尖
-		Vector2(size * 0.2, -size * 0.7), # 右上
-		Vector2(size * 0.1, size * 0.6) # 右下
-	])
-	draw_polygon(crystal_1, PackedColorArray([dark_color]))
-	
-	# 晶体 2（中间，稍偏右，更高）
-	var crystal_2 = PackedVector2Array([
-		Vector2(-size * 0.2, size * 0.5), # 左下
-		Vector2(size * 0.1, -size * 1.3), # 左上尖（最高点）
-		Vector2(size * 0.6, -size * 0.9), # 右上
-		Vector2(size * 0.5, size * 0.5) # 右下
-	])
-	draw_polygon(crystal_2, PackedColorArray([color]))
-	
-	# 晶体 3（右侧最小，矮胖）
-	var crystal_3 = PackedVector2Array([
-		Vector2(size * 0.3, size * 0.6), # 左下
-		Vector2(size * 0.5, -size * 0.5), # 上尖
-		Vector2(size * 0.9, -size * 0.3), # 右上
-		Vector2(size * 0.85, size * 0.6) # 右下
-	])
-	draw_polygon(crystal_3, PackedColorArray([light_color]))
-	
-	# 边线勾勒（只画最外层轮廓以节省性能）
-	var outline_color: Color = Color.WHITE.darkened(0.3)
-	for crystal in [crystal_1, crystal_2, crystal_3]:
-		for i in range(crystal.size()):
-			var next_i: int = (i + 1) % crystal.size()
-			draw_line(crystal[i], crystal[next_i], outline_color, 1.0)
+	# 禁用内置图形绘制
+	# queue_redraw()
 
 
 ## 尝试采集资源

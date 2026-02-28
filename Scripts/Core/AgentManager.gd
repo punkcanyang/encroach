@@ -48,6 +48,34 @@ func _ready() -> void:
 		agent_scene = load("res://Scenes/HumanAgent.tscn")
 	
 	print("AgentManager: 族群管理器初始化完成，基础最大人口: %d" % max_agents)
+	
+	call_deferred("_setup_building_signals")
+
+
+var _current_global_max_hp: int = 20
+
+func _setup_building_signals() -> void:
+	var world = get_node_or_null("/root/World")
+	if world != null:
+		var bm = world.get_node_or_null("BuildingManager")
+		if bm != null:
+			bm.building_placed.connect(_on_building_changed)
+			bm.building_removed.connect(_on_building_changed)
+			_current_global_max_hp = bm.get_global_max_hp()
+
+
+func _on_building_changed(_building: Node2D) -> void:
+	var world = get_node_or_null("/root/World")
+	if world == null: return
+	var bm = world.get_node_or_null("BuildingManager")
+	if bm == null or not bm.has_method("get_global_max_hp"): return
+	
+	var new_max_hp = bm.get_global_max_hp()
+	if new_max_hp != _current_global_max_hp:
+		_current_global_max_hp = new_max_hp
+		for a in agents:
+			if is_instance_valid(a) and a.has_method("update_max_hp"):
+				a.update_max_hp(new_max_hp)
 
 
 func add_agent(position: Vector2, min_lifespan: int = 20, max_lifespan: int = 30) -> Node2D:
@@ -66,6 +94,10 @@ func add_agent(position: Vector2, min_lifespan: int = 20, max_lifespan: int = 30
 	agent.agent_died.connect(_on_agent_died)
 	
 	agents.append(agent)
+	
+	if agent.has_method("update_max_hp"):
+		agent.update_max_hp(_current_global_max_hp)
+	
 	agent_added.emit(agent)
 	return agent
 

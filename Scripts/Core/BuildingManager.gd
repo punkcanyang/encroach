@@ -32,6 +32,7 @@ const BUILDING_DATA: Dictionary = {
 		"storage_cap": 0,
 		"allowed_storage": [],
 		"spawn_human": 0,
+		"provides_hp": 0,
 		"scene_path": "res://Scenes/Farm.tscn",
 		"work_required": 100.0
 	},
@@ -44,6 +45,7 @@ const BUILDING_DATA: Dictionary = {
 		"storage_cap": 500,
 		"allowed_storage": [0, 1, 2],
 		"spawn_human": 2,
+		"provides_hp": 30,
 		"scene_path": "res://Scenes/Residence.tscn",
 		"work_required": 200.0
 	},
@@ -56,6 +58,7 @@ const BUILDING_DATA: Dictionary = {
 		"storage_cap": 2000,
 		"allowed_storage": [0, 1, 2, 3],
 		"spawn_human": 3,
+		"provides_hp": 40,
 		"scene_path": "res://Scenes/Residence.tscn",
 		"work_required": 400.0
 	},
@@ -68,6 +71,7 @@ const BUILDING_DATA: Dictionary = {
 		"storage_cap": 5000,
 		"allowed_storage": [0, 1, 2, 3],
 		"spawn_human": 10,
+		"provides_hp": 80,
 		"scene_path": "res://Scenes/Residence.tscn",
 		"work_required": 1000.0
 	},
@@ -80,6 +84,7 @@ const BUILDING_DATA: Dictionary = {
 		"storage_cap": 100,
 		"allowed_storage": [0, 1],
 		"spawn_human": 1,
+		"provides_hp": 20,
 		"scene_path": "res://Scenes/Cave.tscn", # 新建一个场景或用别的，我将修改一下让蓝图用正确的
 		"work_required": 100.0
 	}
@@ -116,6 +121,28 @@ func get_all_blueprints() -> Array[Node2D]:
 	return blueprints
 
 
+## 动态计算当前全村人最高可能的 HP 上限
+func get_global_max_hp() -> int:
+	var max_hp = 20 # 默认山洞底线
+	for b in buildings:
+		if is_instance_valid(b) and "building_type" in b:
+			var data = get_building_data(b.building_type)
+			var hp = data.get("provides_hp", 0)
+			if hp > max_hp:
+				max_hp = hp
+	
+	# 如果山洞还在
+	var world = get_node_or_null("/root/World")
+	if world != null:
+		var cave = world.get_node_or_null("Cave")
+		if cave != null and is_instance_valid(cave):
+			var data = get_building_data(BuildingType.CAVE)
+			var hp = data.get("provides_hp", 20)
+			if hp > max_hp: max_hp = hp
+			
+	return max_hp
+
+
 ## 获取指定的建筑配置数据
 func get_building_data(type: int) -> Dictionary:
 	return BUILDING_DATA.get(type, {})
@@ -135,12 +162,17 @@ func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 			print(" BuildingManager[Collision]: 越界，候选 %s 不在世界 %s 范围内" % [str(rect), str(world_rect)])
 			return true
 	
+	# 如果是原址升级，使用老建筑的体积作为碰撞核查依据，从而提供体积膨胀宽容度，避免原址被卡死无法升级
+	var test_rect: Rect2 = rect
+	if ignore_node != null and is_instance_valid(ignore_node):
+		test_rect = _get_entity_rect(ignore_node)
+	
 	# 检查与其他建筑的碰撞
 	for entity in buildings + blueprints:
 		if entity == ignore_node or not is_instance_valid(entity):
 			continue
 		var entity_rect: Rect2 = _get_entity_rect(entity)
-		if rect.intersects(entity_rect):
+		if test_rect.intersects(entity_rect):
 			print(" BuildingManager[Collision]: 与其他建筑重叠 -> %s (位置: %s，大小: %s)" % [entity.name, str(entity_rect.position), str(entity_rect.size)])
 			return true
 	
@@ -148,7 +180,7 @@ func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 	var cave = _world.get_node_or_null("Cave")
 	if cave != null and cave != ignore_node and is_instance_valid(cave):
 		var cave_rect: Rect2 = _get_entity_rect(cave)
-		if rect.intersects(cave_rect):
+		if test_rect.intersects(cave_rect):
 			print(" BuildingManager[Collision]: 与山洞重叠 -> (位置: %s, 大小: %s)" % [str(cave_rect.position), str(cave_rect.size)])
 			return true
 			
@@ -160,7 +192,7 @@ func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 		if res.has_method("collect") and not res.name.begins_with("Human"):
 			# 这是个野生资源
 			var res_rect: Rect2 = Rect2(res.global_position - Vector2(10, 10), Vector2(20, 20))
-			if rect.intersects(res_rect):
+			if test_rect.intersects(res_rect):
 				print(" BuildingManager[Collision]: 与野生资源重叠 -> %s" % res.name)
 				return true
 				
@@ -183,7 +215,8 @@ func _get_entity_rect(entity: Node2D) -> Rect2:
 
 
 ## 放置一个建筑（通常初始作为蓝图）
-func place_building(type: int, position: Vector2, is_instant: bool = false) -> Node2D:
+## WHY: 增加 upgrade_target 参数以绕开被升级对象的碰撞检测
+func place_building(type: int, position: Vector2, is_instant: bool = false, upgrade_target: Node2D = null) -> Node2D:
 	var data: Dictionary = get_building_data(type)
 	if data.is_empty():
 		push_error("BuildingManager: 未找到建筑类型 %d 的数据" % type)
@@ -192,7 +225,7 @@ func place_building(type: int, position: Vector2, is_instant: bool = false) -> N
 	var size: Vector2 = data.get("size", Vector2(40, 40))
 	var placement_rect: Rect2 = Rect2(position - size / 2.0, size)
 	
-	if check_collision(placement_rect):
+	if check_collision(placement_rect, upgrade_target):
 		print("BuildingManager: 放置失败，位置产生碰撞 %s，矩形: %s" % [str(position), str(placement_rect)])
 		return null
 		
@@ -215,6 +248,10 @@ func place_building(type: int, position: Vector2, is_instant: bool = false) -> N
 	building.position = position
 	if "building_type" in building:
 		building.building_type = type
+		
+	# 记录要替换的旧建筑以便竣工时处理迁移
+	if upgrade_target != null:
+		building.set_meta("upgrade_target", upgrade_target)
 		
 	# 确保生成的名称唯一以防止节点树同级冲突和引用混乱
 	building.name = "%s_%d" % [data.get("id", "Building"), Time.get_ticks_msec()]
@@ -240,6 +277,28 @@ func place_building(type: int, position: Vector2, is_instant: bool = false) -> N
 func finalize_blueprint(building: Node2D) -> void:
 	if building in blueprints:
 		blueprints.erase(building)
+		
+		# ================= 迁移升级资源逻辑 =================
+		if building.has_meta("upgrade_target"):
+			var old_target = building.get_meta("upgrade_target")
+			if is_instance_valid(old_target):
+				print("BuildingManager: 检测到建筑升级竣工，开始交接资源...")
+				
+				# 转移存储资源
+				if "storage" in old_target and old_target.storage is Dictionary:
+					if "storage" in building:
+						for type in old_target.storage:
+							var amount = old_target.storage[type]
+							if amount > 0:
+								if building.has_method("add_resource"):
+									building.add_resource(type, amount)
+								else:
+									building.storage[type] = building.storage.get(type, 0) + amount
+					old_target.storage.clear()
+				
+				remove_building(old_target)
+		# ============================================================
+		
 		buildings.append(building)
 		building_placed.emit(building)
 		print("BuildingManager: 蓝图施工完成并转为正式建筑")

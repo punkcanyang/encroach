@@ -36,12 +36,7 @@ func _process(_delta: float) -> void:
 	if _camera == null or not is_instance_valid(_camera):
 		_camera = get_node_or_null("/root/World/WorldCamera") as Camera2D
 		
-	# 按 B 键快捷切换选中农田 (后期将被 UI 按钮替代)
-	if Input.is_action_just_pressed("ui_accept") or Input.is_key_pressed(KEY_B):
-		if current_build_type == -1:
-			enter_build_mode(0) # 0 = BuildingType.FARM
-		else:
-			exit_build_mode()
+	# 移除快捷键，全由 UI 按钮触发
 			
 	# 如果在建造模式，更新预览位置和验证状态
 	if current_build_type != -1 and _camera != null and _building_manager != null:
@@ -57,19 +52,54 @@ func _process(_delta: float) -> void:
 		queue_redraw()
 
 
+signal building_selected(target: Node2D)
+
 func _unhandled_input(event: InputEvent) -> void:
-	if current_build_type == -1:
-		return
-		
-	# 处于建造模式下，监听鼠标左键点击
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed:
-			# 吃掉点击事件，防止相机拖拽
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		if current_build_type == -1:
+			# 非建造模式下：点选物品
+			_try_select_object()
+		else:
+			# 处于建造模式下：放置蓝图
 			get_viewport().set_input_as_handled()
 			_try_place_building()
-		else:
-			# 释放鼠标也吃掉，防止相机取消拖拽状态错误
+			
+	# FIXME: 这里仅在按下时处理，释放时如有拖拽相机逻辑应由相机自己处理
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		if current_build_type != -1:
 			get_viewport().set_input_as_handled()
+
+
+func _try_select_object() -> void:
+	if _camera == null: return
+	
+	var world_pos = _camera.get_global_mouse_position()
+	var zoom_factor = 1.0 / max(_camera.zoom.x, 0.01)
+	var inspectables = get_tree().get_nodes_in_group("inspectable")
+	
+	var found_object: Node2D = null
+	var closest_dist: float = INF
+	
+	for child in inspectables:
+		if not child is Node2D or not is_instance_valid(child): continue
+		
+		# WILD 资源暂不弹窗，只认建筑和山洞
+		var is_building = child.name == "Cave" or child.is_in_group("building")
+		if not is_building: continue
+		
+		var base_radius = 50.0
+		var check_radius = base_radius * zoom_factor
+		var dist = child.global_position.distance_to(world_pos)
+		
+		if dist < check_radius and dist < closest_dist:
+			closest_dist = dist
+			found_object = child
+			
+	building_selected.emit(found_object)
+	if found_object:
+		print("PlayerController: 选中了物件 -> ", found_object.name)
+	else:
+		print("PlayerController: 点击了空地，取消选中")
 
 
 func _try_place_building() -> void:
@@ -83,7 +113,8 @@ func _try_place_building() -> void:
 	var data = _building_manager.get_building_data(current_build_type)
 	var cost_dict: Dictionary = data.get("cost", {})
 	
-	if not _try_consume_global_resources(cost_dict):
+	var storages = _get_all_storages()
+	if not _check_global_resources(cost_dict, storages):
 		print("PlayerController: 资源不足！无法放置蓝图")
 		return
 	
@@ -92,6 +123,7 @@ func _try_place_building() -> void:
 	var blueprint = _building_manager.place_building(current_build_type, mouse_pos, false)
 	
 	if blueprint != null:
+		_consume_global_resources(cost_dict, storages)
 		print("PlayerController: 成功放置类为 %d 的蓝图并扣除对应资源" % current_build_type)
 		queue_redraw()
 		# 放置后是否退出建造模式取决于设计，这里暂时允许连续放置
@@ -112,43 +144,37 @@ func upgrade_building(old_building: Node2D, next_type: int) -> void:
 	if data.is_empty(): return
 	
 	var cost_dict: Dictionary = data.get("cost", {})
-	print("PlayerController: 准备进入建造与升级消耗判定，花费配置：", cost_dict)
-	if not _try_consume_global_resources(cost_dict):
+	print("PlayerController: 准备进入升级消耗判定，花费配置：", cost_dict)
+	
+	var storages = _get_all_storages()
+	if not _check_global_resources(cost_dict, storages):
 		print("PlayerController: 升级拦截 -> 资源不足！无法升级建筑")
 		return
 		
 	var target_pos = old_building.global_position
 	
-	# 开始接管原内部储存
-	var old_storage: Dictionary = {}
-	if "storage" in old_building and old_building.storage is Dictionary:
-		old_storage = old_building.storage.duplicate()
-		
-	# 移除旧实体
-	_building_manager.remove_building(old_building)
-	
-	# 原理生成升阶蓝图
-	var new_bp = _building_manager.place_building(next_type, target_pos, false)
+	# 原址生成升阶蓝图，强制绕开碰撞检查，并关联旧建筑
+	var new_bp = _building_manager.place_building(next_type, target_pos, false, old_building)
 	if new_bp != null:
-		# 强制把旧储物塞入新蓝图底层肚子，等竣工后即可直接取用（或在蓝图期也能查阅）
-		if "storage" in new_bp:
-			new_bp.storage = old_storage
-		print("PlayerController: 发起原址建筑升级至 %d" % next_type)
+		# 只有在蓝图实际成功放置时，才真实扣除花费
+		_consume_global_resources(cost_dict, storages)
+		print("PlayerController: 成功放置升级蓝图并扣除了资源")
+	else:
+		push_warning("PlayerController: 蓝图放置发生碰撞等阻碍失败，幸好资源尚未扣除！")
 
 
-func _try_consume_global_resources(cost_dict: Dictionary) -> bool:
-	print("PlayerController[_try_consume_global_resources]: 请求花费 - ", cost_dict)
-	if cost_dict.is_empty(): return true
-	
+func _get_all_storages() -> Array[Node2D]:
 	var bm = get_node_or_null("/root/World/BuildingManager")
 	var cave = get_node_or_null("/root/World/Cave")
 	var storages: Array[Node2D] = []
 	if cave != null: storages.append(cave)
 	if bm != null and bm.has_method("get_all_buildings"):
-		var all_b = bm.get_all_buildings()
-		storages.append_array(all_b)
-		
-	# 1. 预检查全图余量
+		storages.append_array(bm.get_all_buildings())
+	return storages
+
+
+func _check_global_resources(cost_dict: Dictionary, storages: Array[Node2D]) -> bool:
+	if cost_dict.is_empty(): return true
 	for type in cost_dict:
 		var req = cost_dict[type]
 		var total_owned = 0
@@ -158,8 +184,13 @@ func _try_consume_global_resources(cost_dict: Dictionary) -> bool:
 		if total_owned < req:
 			print("PlayerController: 缺乏 %s, 需 %d 实有 %d" % [ResourceTypes.get_type_name(type), req, total_owned])
 			return false
-			
-	# 2. 真实扣除
+	return true
+
+
+func _consume_global_resources(cost_dict: Dictionary, storages: Array[Node2D]) -> void:
+	if cost_dict.is_empty(): return
+	
+	# 真实扣除
 	for type in cost_dict:
 		var remain: int = cost_dict[type]
 		for s in storages:
@@ -177,9 +208,7 @@ func _try_consume_global_resources(cost_dict: Dictionary) -> bool:
 				if s.has_user_signal("storage_changed") or s.has_signal("storage_changed"):
 					# Building/Cave 的 consume_resource 已内部 emit，不过如果有些还没完全连上，我们保底调用一次
 					pass
-			
-	return true
-
+					
 
 func exit_build_mode() -> void:
 	current_build_type = -1

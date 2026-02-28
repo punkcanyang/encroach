@@ -30,10 +30,10 @@ const MIN_WINDOW_SIZE: Vector2i = Vector2i(800, 600)
 
 ## 配置常量：可用的分辨率列表
 const AVAILABLE_RESOLUTIONS: Array[Vector2i] = [
-	Vector2i(1280, 720),   # 720p (HD)
-	Vector2i(1920, 1080),  # 1080p (Full HD)
-	Vector2i(2560, 1440),  # 1440p (2K)
-	Vector2i(3840, 2160),  # 4K
+	Vector2i(1280, 720), # 720p (HD)
+	Vector2i(1920, 1080), # 1080p (Full HD)
+	Vector2i(2560, 1440), # 1440p (2K)
+	Vector2i(3840, 2160), # 4K
 ]
 
 
@@ -74,15 +74,15 @@ func _load_settings() -> void:
 ## 创建默认设置
 func _create_default_settings() -> void:
 	# 显示设置
-	_set_default_value("display", "window_mode", "windowed")  # windowed, fullscreen, borderless
+	_set_default_value("display", "window_mode", "windowed") # windowed, fullscreen, borderless
 	_set_default_value("display", "resolution", DEFAULT_WINDOW_SIZE)
 	_set_default_value("display", "vsync", true)
 	_set_default_value("display", "target_fps", 60)
 	
 	# 游戏设置
-	_set_default_value("game", "time_scale", 1.0)  # 时间流逝速度倍率
-	_set_default_value("game", "tick_rate", 0.5)   # 每个 Tick 的秒数
-	_set_default_value("game", "ticks_per_day", 10)
+	_set_default_value("game", "time_scale", 1.0) # 时间流逝速度倍率
+	_set_default_value("game", "tick_rate", 0.5) # 每个 Tick 的秒数
+	_set_default_value("game", "ticks_per_day", 3)
 	
 	# 音频设置（占位，MVP 暂不实现音频）
 	_set_default_value("audio", "master_volume", 100)
@@ -229,7 +229,7 @@ func set_resolution(width: int, height: int) -> void:
 
 ## 设置游戏速度倍率
 func set_time_scale(scale: float) -> void:
-	scale = clamp(scale, 0.1, 3.0)  # 限制在 0.1x 到 3.0x 之间
+	scale = clamp(scale, 0.1, 3.0) # 限制在 0.1x 到 3.0x 之间
 	set_setting("game", "time_scale", scale)
 	Engine.time_scale = scale
 
