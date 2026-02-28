@@ -53,8 +53,14 @@ func _process(_delta: float) -> void:
 
 
 signal building_selected(target: Node2D)
+signal building_hovered(target: Node2D)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		if current_build_type == -1:
+			# 非建造模式下：鼠标划过侦测
+			_try_hover_object()
+			
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		if current_build_type == -1:
 			# 非建造模式下：点选物品
@@ -83,7 +89,7 @@ func _try_select_object() -> void:
 	for child in inspectables:
 		if not child is Node2D or not is_instance_valid(child): continue
 		
-		# WILD 资源暂不弹窗，只认建筑和山洞
+		# 点击弹窗，只认建筑和山洞
 		var is_building = child.name == "Cave" or child.is_in_group("building")
 		if not is_building: continue
 		
@@ -100,6 +106,37 @@ func _try_select_object() -> void:
 		print("PlayerController: 选中了物件 -> ", found_object.name)
 	else:
 		print("PlayerController: 点击了空地，取消选中")
+
+var _last_hovered: Node2D = null
+
+func _try_hover_object() -> void:
+	if _camera == null: return
+	
+	var world_pos = _camera.get_global_mouse_position()
+	var zoom_factor = 1.0 / max(_camera.zoom.x, 0.01)
+	var inspectables = get_tree().get_nodes_in_group("inspectable")
+	
+	var found_object: Node2D = null
+	var closest_dist: float = INF
+	
+	for child in inspectables:
+		if not child is Node2D or not is_instance_valid(child): continue
+		
+		# 悬停弹窗，只认野生资源
+		var is_building = child.name == "Cave" or child.is_in_group("building")
+		if is_building: continue
+		
+		var base_radius = 50.0
+		var check_radius = base_radius * zoom_factor
+		var dist = child.global_position.distance_to(world_pos)
+		
+		if dist < check_radius and dist < closest_dist:
+			closest_dist = dist
+			found_object = child
+			
+	if found_object != _last_hovered:
+		_last_hovered = found_object
+		building_hovered.emit(found_object)
 
 
 func _try_place_building() -> void:

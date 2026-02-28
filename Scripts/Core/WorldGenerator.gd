@@ -114,8 +114,8 @@ func _generate_world() -> void:
 	print("初始人口: 1 人")
 	var time_system = get_node_or_null("/root/World/TimeSystem")
 	var ticks = 3 if time_system == null else time_system.ticks_per_day
-	print("时间系统: %d ticks = 1 天, 365 天 = 1 年" % ticks)
-	print("繁殖规则: 每10年(3650天)自动繁殖，消耗50食物")
+	print("时间系统: %d ticks = 1 天, 10 天 = 1 年" % ticks)
+	print("繁殖规则: 拥有建筑后自动繁殖（如山洞每10年/100天），每次消耗50食物")
 	print("消耗速度: 每天从山洞进食一次")
 	print("提示: 鼠标悬停在物件上查看详细信息\n")
 

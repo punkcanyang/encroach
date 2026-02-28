@@ -8,9 +8,32 @@
 extends "res://Scripts/Entities/Building.gd"
 
 
+signal human_spawned(agent: Node2D)
+signal spawn_failed(reason: String)
+
+var _time_system: Node = null
+var _agent_manager: Node = null
+
+const FOOD_COST_PER_HUMAN: int = 50
+
+var _days_active: int = 0
+
 func _ready() -> void:
 	# 确保加入通用建筑组
 	super._ready()
+	
+	if not is_blueprint:
+		_connect_to_systems()
+
+func _connect_to_systems() -> void:
+	var world: Node = get_node_or_null("/root/World")
+	if world == null: return
+
+	_time_system = world.get_node_or_null("TimeSystem")
+	if _time_system != null:
+		_time_system.day_passed.connect(_on_day_passed)
+
+	_agent_manager = world.get_node_or_null("AgentManager")
 
 
 func _draw() -> void:
@@ -113,3 +136,59 @@ func get_status() -> Dictionary:
 		status["bonus_storage"] = data.get("storage_cap", 0)
 		
 	return status
+
+
+func _on_day_passed(_current_day: int) -> void:
+	if is_blueprint:
+		return
+		
+	_days_active += 1
+		
+	var manager = get_node_or_null("/root/World/BuildingManager")
+	if manager != null and manager.has_method("get_building_data"):
+		var data = manager.get_building_data(building_type)
+		var spawn_interval = data.get("spawn_interval_days", 0)
+		
+		# 只有当此建筑被配有独立的小周期时才激活繁衍机制
+		if spawn_interval > 0 and _days_active > 0 and _days_active % spawn_interval == 0:
+			_try_spawn_human()
+
+
+## 尝试由此建筑生成新人类
+func _try_spawn_human() -> void:
+	if _agent_manager != null and _agent_manager.agents.size() >= _agent_manager.get_parent().get_node("Cave").get_max_population():
+		spawn_failed.emit("人口已达全局上限")
+		return
+
+	# 住宅繁衍消耗其自储备的对应食物
+	var has_food: int = 0
+	if "storage" in self and typeof(storage) == TYPE_DICTIONARY:
+		has_food = storage.get(0, 0) # 0 = ResourceTypes.Type.FOOD
+	
+	if has_food < FOOD_COST_PER_HUMAN:
+		spawn_failed.emit("本住所食粮不足，无法生成新生儿")
+		return
+
+	if _agent_manager == null:
+		spawn_failed.emit("AgentManager 不可用")
+		return
+
+	# 扣除食物
+	storage[0] -= FOOD_COST_PER_HUMAN
+	if has_signal("storage_changed"):
+		emit_signal("storage_changed", self , 0, storage[0])
+
+	# 随机出生在房子周围
+	var spawn_offset: Vector2 = Vector2(randf_range(-40, 40), randf_range(-40, 40))
+	var spawn_position: Vector2 = global_position + spawn_offset
+
+	var new_human: Node2D = _agent_manager.add_agent(spawn_position, 20, 30)
+	if new_human != null:
+		human_spawned.emit(new_human)
+		var b_name = get_node("/root/World/BuildingManager").get_building_data(building_type).get("name", "住所")
+		print("🏠 %s: 居民新生儿降生！消耗库存食物 %d" % [tr(b_name), FOOD_COST_PER_HUMAN])
+		queue_redraw()
+	else:
+		# 生成失败则回退食物
+		storage[0] += FOOD_COST_PER_HUMAN
+		spawn_failed.emit("Agent生成失败")

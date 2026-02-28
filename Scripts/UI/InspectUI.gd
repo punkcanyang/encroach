@@ -22,14 +22,14 @@ const UPGRADE_MAP: Dictionary = {
 ## UI 节点引用
 var _info_panel: Panel = null
 var _title_label: Label = null
-var _content_label: Label = null
+var _content_label: RichTextLabel = null
 var _upgrade_btn: Button = null
 var _close_btn: Button = null
 
 ## 内部状态
 var _selected_object: Node2D = null
 var _player_controller: Node = null
-
+var _is_pinned: bool = false
 
 var _init_print_done = false
 
@@ -68,18 +68,21 @@ func _create_ui_nodes() -> void:
 	_close_btn.pressed.connect(_on_close_pressed)
 	_info_panel.add_child(_close_btn)
 	
-	# 内容区
-	_content_label = Label.new()
+	# 内容区 (更换为富文本以支持配色与粗体)
+	_content_label = RichTextLabel.new()
 	_content_label.position = Vector2(10, 45)
-	_content_label.size = Vector2(PANEL_SIZE.x - 20, PANEL_SIZE.y - 100)
-	_content_label.add_theme_font_size_override("font_size", 14)
-	_content_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_content_label.size = Vector2(PANEL_SIZE.x - 20, PANEL_SIZE.y - 120)
+	_content_label.add_theme_font_size_override("normal_font_size", 14)
+	_content_label.add_theme_font_size_override("bold_font_size", 14)
+	_content_label.bbcode_enabled = true
+	_content_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content_label.scroll_active = false
 	_info_panel.add_child(_content_label)
 	
 	# 升级按钮
 	_upgrade_btn = Button.new()
-	_upgrade_btn.position = Vector2(10, PANEL_SIZE.y - 50)
-	_upgrade_btn.size = Vector2(PANEL_SIZE.x - 20, 40)
+	_upgrade_btn.position = Vector2(10, PANEL_SIZE.y - 70)
+	_upgrade_btn.size = Vector2(PANEL_SIZE.x - 20, 60)
 	_upgrade_btn.add_theme_font_size_override("font_size", 14)
 	_upgrade_btn.pressed.connect(_on_upgrade_pressed)
 	_upgrade_btn.visible = false # 默认隐藏
@@ -87,20 +90,39 @@ func _create_ui_nodes() -> void:
 
 
 func _on_building_selected(target: Node2D) -> void:
-	print("InspectUI: 接到显示命令，目标 -> ", target)
+	print("InspectUI: 接到点击锁定，目标 -> ", target)
 	if target == null:
 		_info_panel.visible = false
 		_selected_object = null
+		_is_pinned = false
+		return
+		
+	_selected_object = target
+	_is_pinned = true
+	_update_inspect_content()
+	_info_panel.visible = true
+
+
+func _on_building_hovered(target: Node2D) -> void:
+	if _is_pinned: return
+	
+	if target == null:
+		# 没有悬停到目标且面板没被固定时，自动隐藏面板
+		if _info_panel.visible:
+			_info_panel.visible = false
+			_selected_object = null
 		return
 		
 	_selected_object = target
 	_update_inspect_content()
-	_info_panel.visible = true
+	if not _info_panel.visible:
+		_info_panel.visible = true
 
 
 func _on_close_pressed() -> void:
 	_info_panel.visible = false
 	_selected_object = null
+	_is_pinned = false
 
 
 func _process(_delta: float) -> void:
@@ -113,6 +135,8 @@ func _process(_delta: float) -> void:
 		_player_controller = get_node_or_null("/root/World/PlayerController")
 		if _player_controller != null and _player_controller.has_signal("building_selected"):
 			_player_controller.building_selected.connect(_on_building_selected)
+			if _player_controller.has_signal("building_hovered"):
+				_player_controller.building_hovered.connect(_on_building_hovered)
 			print("InspectUI: 成功绑定 PlayerController 信号！")
 			
 	# 定期刷新数据（当面板开着的时候）
@@ -150,6 +174,11 @@ func _update_inspect_content() -> void:
 			content = _format_residence_info(status)
 		elif current_type == 0: # FARM
 			content = _format_farm_info(status)
+		elif "depleted" in status:
+			# 野生资源点
+			if "type" in status:
+				title = "🌲 " + tr(status["type"])
+			content = _format_resource_info(status)
 		else:
 			content = "状态不可用"
 	else:
@@ -157,7 +186,9 @@ func _update_inspect_content() -> void:
 		content = "状态不可用"
 		
 	_title_label.text = title
-	_content_label.text = content
+	_content_label.text = content # 先兜底清理文本
+	_content_label.text = "" # 彻底清空普通纯文本，强制走 BBCode
+	_content_label.parse_bbcode(content)
 	
 	_update_upgrade_button()
 
@@ -188,11 +219,17 @@ func _update_upgrade_button() -> void:
 		
 	var cost_dict = data.get("cost", {})
 	var cost_hint = ""
+	var i = 0
 	for rc in cost_dict:
-		cost_hint += "%s:%d  " % [tr(ResourceTypes.get_type_name(rc)), cost_dict[rc]]
+		cost_hint += "%s: %d" % [tr(ResourceTypes.get_type_name(rc)), cost_dict[rc]]
+		i += 1
+		if i % 2 == 0:
+			cost_hint += "\n" # 每两个换一行
+		else:
+			cost_hint += "   "
 		
 	var next_name = tr(data.get("name", "Unknown"))
-	_upgrade_btn.text = "升级至 %s\n(%s)" % [next_name, cost_hint.strip_edges()]
+	_upgrade_btn.text = "升级至  %s\n─ 需求建材 ─\n%s" % [next_name, cost_hint.strip_edges()]
 	_upgrade_btn.visible = true
 
 
@@ -224,24 +261,34 @@ func _format_cave_info(status: Dictionary) -> String:
 			cap = max_storage_dict # 向后兼容
 			
 		var icon: String = ResourceTypes.get_type_icon(type)
-		text += "%s %s:  %d / %d\n" % [icon, tr(ResourceTypes.get_type_name(type)), amount, cap]
+		text += "  %s [color=#dddddd]%s:[/color]  [b]%d[/b] / %d\n" % [icon, tr(ResourceTypes.get_type_name(type)), amount, cap]
 	return text
 
 
-## 格式化营地大楼 (WOODEN_HUT, STONE_HOUSE, RESIDENCE_BUILDING) 信息
+## 格式化野生资源点信息
+func _format_resource_info(status: Dictionary) -> String:
+	var text: String = "\n"
+	text += "[color=#dddddd]剩余储量:[/color] [b]%d[/b] / %d\n" % [status.get("amount", 0), status.get("max_amount", 0)]
+	if status.get("depleted", false):
+		text += "[color=#ff6666]▶ 状态: 已彻底枯竭[/color]"
+	else:
+		text += "[color=#88ff88]▶ 状态: 可开采[/color]"
+	return text
+
+## 格式化建筑 (Farm / Residence) 信息
 func _format_residence_info(status: Dictionary) -> String:
 	var text: String = ""
 	if status.get("is_blueprint", true):
-		text += "🚧 [正在施工中]\n"
+		text += "\n[color=#ffdd55]🚧 正在施工中[/color]\n"
 		var progress: float = status.get("progress", 0.0)
 		var req: float = status.get("work_required", 1.0)
-		text += "当前进度: %d%%\n等待小人敲打完成" % int((progress / req) * 100)
+		text += "[color=#999999]当前进度: %d%%\n等待居民敲打完成...[/color]" % int((progress / req) * 100)
 		return text
 		
 	var p: int = status.get("bonus_pop", 0)
 	var s: int = status.get("bonus_storage", 0)
-	if p > 0: text += "👥 提供人口上限: +%d\n" % p
-	if s > 0: text += "📦 提供单矿物上限: +%d\n" % s
+	if p > 0: text += "👥 提供人口上限: [color=#aaddff][b]+%d[/b][/color]\n" % p
+	if s > 0: text += "📦 提供单矿物上限: [color=#aaddff][b]+%d[/b][/color]\n" % s
 	
 	# 打印目前储存的东西
 	if "storage" in status and status.storage is Dictionary:
@@ -250,9 +297,9 @@ func _format_residence_info(status: Dictionary) -> String:
 		for t in storage:
 			if storage[t] > 0:
 				if not has_any:
-					text += "--------------\n"
+					text += "\n[color=#888888]─────── 库存物资 ───────[/color]\n"
 					has_any = true
-				text += "%s: %d\n" % [tr(ResourceTypes.get_type_name(t)), storage[t]]
+				text += "  [color=#dddddd]%s:[/color] [b]%d[/b]\n" % [tr(ResourceTypes.get_type_name(t)), storage[t]]
 		
 	return text
 
@@ -260,16 +307,16 @@ func _format_residence_info(status: Dictionary) -> String:
 func _format_farm_info(status: Dictionary) -> String:
 	var text: String = ""
 	if status.get("is_blueprint", true):
-		text += "🚧 [正在施工中]\n"
+		text += "\n[color=#ffdd55]🚧 农田开垦中[/color]\n"
 		var progress: float = status.get("progress", 0.0)
 		var req: float = status.get("work_required", 1.0)
-		text += "当前进度: %d%%\n等待小人开垦完" % int((progress / req) * 100)
+		text += "[color=#999999]当前进度: %d%%\n等待居民翻土完成...[/color]" % int((progress / req) * 100)
 		return text
 		
-	text += "🌱 农田\n熟练度: %d 级\n" % (status.get("proficiency", 0) / 10)
+	text += "🌱 [color=#dddddd]农田熟练度:[/color] [b]%d[/b] 级\n" % (status.get("proficiency", 0) / 10)
 	if status.get("is_ready", false):
-		text += "▶ 状态: 可收割 (预计产出: %d)\n" % status.get("current_yield", 0)
+		text += "[color=#88ff88]▶ 状态: 可收割 (产出: [b]%d[/b])[/color]\n" % status.get("current_yield", 0)
 	else:
-		text += "▶ 状态: 生长中 (%.1f%%)\n" % status.get("growth", 0)
+		text += "[color=#aaddff]▶ 状态: 生长中 (%.1f%%)[/color]\n" % status.get("growth", 0)
 		
 	return text

@@ -33,10 +33,6 @@ const MAX_STORAGE_PER_TYPE: int = 100
 ## 常量：生成一个人类所需的食物
 const FOOD_COST_PER_HUMAN: int = 50
 
-## 常量：生成人类的间隔（天）
-const SPAWN_INTERVAL_DAYS: int = 3650
-const DAYS_PER_YEAR: int = 365
-
 ## 常量：山洞绘制大小
 const CAVE_SIZE: float = 40.0
 
@@ -62,6 +58,7 @@ var last_spawn_year: int = 0
 var building_type: int = 4 # BuildingType.CAVE
 var is_blueprint: bool = false
 var construction_progress: float = 0.0
+var _days_active: int = 0
 var work_required: float = 100.0
 
 ## 内部引用
@@ -191,23 +188,34 @@ func _draw() -> void:
 	draw_string(font, Vector2(-text_size.x * 0.5, CAVE_SIZE + 20), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
 
 
-func _on_day_passed(current_day: int) -> void:
-	if current_day > 0 and current_day % SPAWN_INTERVAL_DAYS == 0:
-		_try_spawn_human()
+func _on_day_passed(_current_day: int) -> void:
+	if is_blueprint:
+		return
+		
+	_days_active += 1
+		
+	var manager = get_node_or_null("/root/World/BuildingManager")
+	if manager != null and manager.has_method("get_building_data"):
+		var data = manager.get_building_data(building_type)
+		var spawn_interval = data.get("spawn_interval_days", 0)
+		
+		# 只有当此建筑被配有独立的小周期时才激活繁衍机制
+		if spawn_interval > 0 and _days_active > 0 and _days_active % spawn_interval == 0:
+			_try_spawn_human()
 
 
 ## 尝试生成新人类
 func _try_spawn_human() -> void:
 	if _agent_manager != null and _agent_manager.agents.size() >= get_max_population():
-		spawn_failed.emit("人口已达上限 (%d)" % get_max_population())
-		print("🏠 Cave: 10年繁殖周期到达，但人口已达上限 %d，暂停繁殖" % get_max_population())
+		spawn_failed.emit("人口已达全局上限 (%d)" % get_max_population())
+		print("🏠 Cave: 繁殖周期到达，但人口已达上限 %d，暂停繁殖" % get_max_population())
 		return
 
 	var food: int = storage.get(ResourceTypes.Type.FOOD, 0)
 
 	if food < FOOD_COST_PER_HUMAN:
 		spawn_failed.emit("食物不足（需要 %d，现有 %d）" % [FOOD_COST_PER_HUMAN, food])
-		print("🏠 Cave: 10年繁殖周期到达，但食物不足（需要 %d，现有 %d），无法生成新人类" % [FOOD_COST_PER_HUMAN, food])
+		print("🏠 Cave: 繁殖周期到达，但食物不足（需要 %d，现有 %d），无法生成新人类" % [FOOD_COST_PER_HUMAN, food])
 		return
 
 	if _agent_manager == null:

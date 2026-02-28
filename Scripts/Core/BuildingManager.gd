@@ -32,6 +32,7 @@ const BUILDING_DATA: Dictionary = {
 		"storage_cap": 0,
 		"allowed_storage": [],
 		"spawn_human": 0,
+		"spawn_interval_days": 0, # 农田不产人口
 		"provides_hp": 0,
 		"scene_path": "res://Scenes/Farm.tscn",
 		"work_required": 100.0
@@ -45,6 +46,7 @@ const BUILDING_DATA: Dictionary = {
 		"storage_cap": 500,
 		"allowed_storage": [0, 1, 2],
 		"spawn_human": 2,
+		"spawn_interval_days": 80, # 8年一胎（1年=10天）
 		"provides_hp": 30,
 		"scene_path": "res://Scenes/Residence.tscn",
 		"work_required": 200.0
@@ -58,6 +60,7 @@ const BUILDING_DATA: Dictionary = {
 		"storage_cap": 2000,
 		"allowed_storage": [0, 1, 2, 3],
 		"spawn_human": 3,
+		"spawn_interval_days": 50, # 5年一胎
 		"provides_hp": 40,
 		"scene_path": "res://Scenes/Residence.tscn",
 		"work_required": 400.0
@@ -71,6 +74,7 @@ const BUILDING_DATA: Dictionary = {
 		"storage_cap": 5000,
 		"allowed_storage": [0, 1, 2, 3],
 		"spawn_human": 10,
+		"spawn_interval_days": 10, # 大楼人口爆发，1年一胎
 		"provides_hp": 80,
 		"scene_path": "res://Scenes/Residence.tscn",
 		"work_required": 1000.0
@@ -84,6 +88,7 @@ const BUILDING_DATA: Dictionary = {
 		"storage_cap": 100,
 		"allowed_storage": [0, 1],
 		"spawn_human": 1,
+		"spawn_interval_days": 100, # 初始山洞10年一胎
 		"provides_hp": 20,
 		"scene_path": "res://Scenes/Cave.tscn", # 新建一个场景或用别的，我将修改一下让蓝图用正确的
 		"work_required": 100.0

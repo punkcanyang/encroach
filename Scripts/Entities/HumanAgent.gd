@@ -11,6 +11,9 @@ extends Node2D
 ## 信号：当 Agent 死亡时发射
 signal agent_died(agent: Node2D, cause: String, age: int)
 
+## 信号：当 Agent 死前身上带了东西时抛出这个遗产
+signal agent_dropped_items(pos: Vector2, type: int, amount: int)
+
 ## 信号：当 Agent 采集到资源时发射
 signal resource_collected(resource_type: int, amount: int)
 
@@ -31,7 +34,7 @@ const HUNGER_THRESHOLD_CRITICAL: float = 25.0
 const HUNGER_THRESHOLD_NON_FOOD: float = 80.0
 const MIN_LIFESPAN_YEARS: int = 20
 const MAX_LIFESPAN_YEARS: int = 30
-const DAYS_PER_YEAR: int = 365
+const DAYS_PER_YEAR: int = 10
 const MOVE_SPEED: float = 300.0
 const CARRY_CAPACITY: int = 10
 const COLLECTION_TIME: float = 1.0
@@ -66,6 +69,17 @@ var _cave: Node2D = null
 var _nearest_resource: Node2D = null
 var _target_building: Node2D = null # WHY: 当前正要去存资源的建筑
 
+# ---------------------------------------------
+# 黑板占位机制 (Blackboard Reservation)
+# 防止大量 Agent 扎堆涌向同一个资源或蓝图
+# ---------------------------------------------
+const MAX_RESERVERS_WILD: int = 1 # 野生矿点最多1人开采
+const MAX_RESERVERS_FARM: int = 2 # 农田最多2人同时收割
+const MAX_RESERVERS_BLUEPRINT: int = 3 # 蓝图最多3人同时敲打
+
+## 当前个人独自锁定的占位目标
+var _reserved_target: Node = null
+
 ## 内部计时器
 var _days_since_last_meal: int = 0
 
@@ -73,9 +87,9 @@ var _days_since_last_meal: int = 0
 func _ready() -> void:
 	add_to_group("inspectable")
 	# 初始化寿命与参数
-	# 后续可以在 AgentManager 创建它时，传入具体建筑的 lifespan 范围覆写
-	var lifespan_years: int = randi_range(MIN_LIFESPAN_YEARS, MAX_LIFESPAN_YEARS)
-	lifespan_days = lifespan_years * DAYS_PER_YEAR
+	# 由 AgentManager 创建它时赋值了 lifespan_days，这里由于 _ready 后于实例化执行，避免覆盖
+	if lifespan_days == 0:
+		lifespan_days = randi_range(10, 20) * DAYS_PER_YEAR
 	age_days = 0
 	age_years = 0
 	hunger = 100.0
@@ -91,7 +105,8 @@ func _ready() -> void:
 	_connect_to_systems()
 	queue_redraw()
 
-	print("HumanAgent: 出生在位置 %s，预计寿命 %d 岁（%d 天）" % [str(global_position), lifespan_years, lifespan_days])
+	var display_years = lifespan_days / float(DAYS_PER_YEAR)
+	print("HumanAgent: 出生在位置 %s，预计寿命 %d 岁（%d 天）" % [str(global_position), int(display_years), lifespan_days])
 
 
 ## 被 AgentManager 调用的全局血量同步
@@ -236,6 +251,10 @@ func _try_consume_food_from_any_storage() -> void:
 
 
 func _update_state_machine() -> void:
+	# 安全兜底：如果脱离了前往资源/采集资源的状态，释放当前的目标占位
+	if current_state != AgentState.MOVING_TO_RESOURCE and current_state != AgentState.COLLECTING:
+		_set_reserved_target(null)
+
 	match current_state:
 		AgentState.IDLE:
 			_decide_next_action()
@@ -266,6 +285,24 @@ func _update_state_machine() -> void:
 			_deposit_to_cave()
 
 
+## 更改个人的专属目标并原子化切换黑板上的占位人数
+func _set_reserved_target(new_target: Node) -> void:
+	if _reserved_target == new_target:
+		return
+		
+	# 释放旧目标
+	if is_instance_valid(_reserved_target):
+		var old_count = _reserved_target.get_meta("reserved_count", 0)
+		_reserved_target.set_meta("reserved_count", max(0, old_count - 1))
+		
+	_reserved_target = new_target
+	
+	# 占有新目标
+	if is_instance_valid(_reserved_target):
+		var new_count = _reserved_target.get_meta("reserved_count", 0)
+		_reserved_target.set_meta("reserved_count", new_count + 1)
+
+
 func _decide_next_action() -> void:
 	# 如果携带资源，寻找最近的合格仓库返回
 	if carried_amount > 0:
@@ -292,13 +329,15 @@ func _decide_next_action() -> void:
 		var bm = world.get_node_or_null("BuildingManager")
 		if bm != null and bm.has_method("get_all_blueprints"):
 			var bps = bm.get_all_blueprints()
-			if bps.size() > 0:
-				var target_bp = bps[0] # 取第一个蓝图
+			for target_bp in bps:
 				if is_instance_valid(target_bp):
-					_nearest_resource = target_bp
-					target_position = target_bp.global_position
-					current_state = AgentState.MOVING_TO_RESOURCE
-					return
+					var current_reservations = target_bp.get_meta("reserved_count", 0)
+					if current_reservations < MAX_RESERVERS_BLUEPRINT:
+						_nearest_resource = target_bp
+						target_position = target_bp.global_position
+						_set_reserved_target(target_bp)
+						current_state = AgentState.MOVING_TO_RESOURCE
+						return
 
 	# 随机游走或寻找资源
 	if randf() < 0.3:
@@ -357,6 +396,17 @@ func _find_and_move_to_nearest_resource() -> void:
 
 		var res_type: int = child.resource_type if "resource_type" in child else 0
 		
+		# ---- 【新增：黑板目标过滤体系】 ----
+		var current_reservations = child.get_meta("reserved_count", 0)
+		var max_allowed = MAX_RESERVERS_WILD
+		if child.is_in_group("building"):
+			max_allowed = MAX_RESERVERS_FARM # 后续如果加入其他生产建筑这里可以动态取值
+		
+		# 强制分流：如果发现该资源点的排队人数已满，直接视而不见（跳过）寻找次远点
+		if current_reservations >= max_allowed:
+			continue
+		# ------------------------------
+		
 		# 全图无空间存放此资源，跳过
 		if not has_space_for.get(res_type, false):
 			continue
@@ -374,12 +424,14 @@ func _find_and_move_to_nearest_resource() -> void:
 	# --- 3. 指派移动目标 ---
 	if _nearest_resource != null:
 		target_position = _nearest_resource.global_position
+		_set_reserved_target(_nearest_resource)
 		current_state = AgentState.MOVING_TO_RESOURCE
 	else:
 		# 没有可用资源，随机移动
 		var generator = world.get_node_or_null("WorldGenerator")
 		if generator != null and generator.has_method("_get_random_position_in_world"):
 			target_position = generator._get_random_position_in_world(100.0)
+			_set_reserved_target(null) # 游走不占位
 			current_state = AgentState.MOVING_TO_RESOURCE
 
 
@@ -477,9 +529,15 @@ func _check_death() -> void:
 func _die(cause: String) -> void:
 	alive = false
 	var cause_text: String = "饿死(生命值耗尽)" if cause == "starvation_hp_depleted" else "寿终正寝"
-	print("☠️  HumanAgent [%d岁/%d天寿命]: %s" % [age_years, lifespan_days, cause_text])
+	var display_years = lifespan_days / float(DAYS_PER_YEAR)
+	print("☠️  HumanAgent [%d岁/%d天寿命]: %s" % [age_years, int(display_years), cause_text])
 
 	agent_died.emit(self , cause, age_years)
+	
+	# 如果肚子里或手上带着没放回去的资源，就爆出来
+	if carried_amount > 0 and carried_type != -1:
+		agent_dropped_items.emit(global_position, carried_type, carried_amount)
+		print("📦 遗物包裹已生成！内含 %s * %d" % [tr(ResourceTypes.get_type_name(carried_type)), carried_amount])
 
 	if _time_system != null:
 		if _time_system.tick_passed.is_connected(_on_tick_passed):

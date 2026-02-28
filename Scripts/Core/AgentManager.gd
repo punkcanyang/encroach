@@ -78,7 +78,36 @@ func _on_building_changed(_building: Node2D) -> void:
 				a.update_max_hp(new_max_hp)
 
 
-func add_agent(position: Vector2, min_lifespan: int = 20, max_lifespan: int = 30) -> Node2D:
+## 动态获取当世最高的科技寿命区间
+func _get_global_lifespan_range() -> Vector2:
+	var min_y = 10
+	var max_y = 20
+	var world = get_node_or_null("/root/World")
+	if world != null:
+		var bm = world.get_node_or_null("BuildingManager")
+		if bm != null and bm.has_method("get_all_buildings"):
+			var has_wooden = false
+			var has_stone = false
+			var has_residence = false
+			for b in bm.get_all_buildings():
+				if "is_blueprint" in b and b.is_blueprint: continue
+				if "building_type" in b:
+					match b.building_type:
+						1: has_wooden = true
+						2: has_stone = true
+						3: has_residence = true
+			if has_residence:
+				min_y = 30
+				max_y = 80
+			elif has_stone:
+				min_y = 30
+				max_y = 50
+			elif has_wooden:
+				min_y = 20
+				max_y = 30
+	return Vector2(min_y, max_y)
+
+func add_agent(position: Vector2, _ignored_min: int = 10, _ignored_max: int = 20) -> Node2D:
 	if agents.size() >= get_max_population():
 		return null
 	
@@ -89,9 +118,11 @@ func add_agent(position: Vector2, min_lifespan: int = 20, max_lifespan: int = 30
 	add_child(agent)
 	agent.position = position
 	
-	# 从外部赋值重写 HumanAgent 的寿命设定
-	agent.lifespan_days = randi_range(min_lifespan, max_lifespan) * 365
+	# 从外部赋值重写 HumanAgent 的寿命设定，取决于最高建筑
+	var lifespan_range = _get_global_lifespan_range()
+	agent.lifespan_days = randi_range(int(lifespan_range.x), int(lifespan_range.y)) * 10
 	agent.agent_died.connect(_on_agent_died)
+	agent.agent_dropped_items.connect(_on_agent_dropped_items)
 	
 	agents.append(agent)
 	
@@ -102,11 +133,23 @@ func add_agent(position: Vector2, min_lifespan: int = 20, max_lifespan: int = 30
 	return agent
 
 
-func _on_agent_died(agent: Node2D, _cause: String, _age: int) -> void:
-	# 由 agent 自己去 queue_free 即可，Manager 只负责从数组移除和发事件
-	if agent in agents:
-		agents.erase(agent)
-		agent_removed.emit(agent)
+func _on_agent_died(agent: Node2D, cause: String, age: int) -> void:
+	print("AgentManager: 收到 Agent 死亡通知: ", agent, " 原因: ", cause, " 享年: ", age)
+	agents.erase(agent)
+	agent_removed.emit(agent)
+
+func _on_agent_dropped_items(pos: Vector2, type: int, amount: int) -> void:
+	var world = get_node_or_null("/root/World")
+	if world == null: return
+	
+	print("AgentManager: 拾荒包裹生成在 %s (物资: %s x %d)" % [str(pos), tr(ResourceTypes.get_type_name(type)), amount])
+	
+	# 此处通过代码动态实例化，因为我们写了完全自包含的 draw 函数
+	var drop = load("res://Scripts/Entities/ResourceDrop.gd").new()
+	drop.resource_type = type
+	drop.amount = amount
+	drop.position = pos
+	world.add_child(drop)
 
 
 func remove_agent(agent: Node2D) -> void:
