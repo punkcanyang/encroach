@@ -397,6 +397,7 @@ func _find_and_move_to_nearest_resource() -> void:
 
 	# --- 新增：取得全局資源短缺權重 ---
 	var resource_weights: Dictionary = {}
+	var _resource_manager = get_node_or_null("/root/World/ResourceManager")
 	if _resource_manager != null and _resource_manager.has_method("get_resource_priority_weights"):
 		resource_weights = _resource_manager.get_resource_priority_weights()
 
@@ -405,13 +406,16 @@ func _find_and_move_to_nearest_resource() -> void:
 	var candidates: Array[Node] = get_tree().get_nodes_in_group("inspectable")
 	
 	for child in candidates:
-		if not child is Node2D: continue
-		if not child.has_method("collect") and not child.has_method("add_progress"): continue
+		# 目標分為兩類：可以採集的資源，或是需要施工的藍圖
+		var is_bp = child.is_blueprint if "is_blueprint" in child else false
+		var can_collect = not is_bp and child.has_method("collect")
+		var can_build = is_bp and child.has_method("add_progress")
 		
+		if not can_collect and not can_build:
+			continue
+			
 		# 是否為採集枯竭確認
 		if child.has_method("is_depleted") and child.is_depleted(): continue
-		# 是否為已完工的藍圖確認
-		if "is_blueprint" in child and not child.is_blueprint and child.has_method("add_progress"): continue
 
 		var res_type: int = child.resource_type if "resource_type" in child else 0
 		
@@ -429,7 +433,6 @@ func _find_and_move_to_nearest_resource() -> void:
 		# ------------------------------
 		
 		# 蓝图不需要存放空间，但采矿需要
-		var is_bp = child.is_blueprint if "is_blueprint" in child else false
 		if not is_bp:
 			# 全图无空间存放此资源，跳过
 			if not has_space_for.get(res_type, false):
@@ -548,18 +551,38 @@ func _deposit_to_cave() -> void:
 		return
 
 	# WHY: 使用通用 add_resource 接口，向其存入
+	var deposited: int = 0
 	if _target_building.has_method("add_resource"):
-		var deposited: int = _target_building.add_resource(carried_type, carried_amount)
+		deposited = _target_building.add_resource(carried_type, carried_amount)
 		if deposited > 0:
 			returned_to_cave.emit(carried_type, deposited)
 			var type_name: String = ResourceTypes.get_type_name(carried_type)
 			print("HumanAgent [%d岁]: 向储藏室存入 %d %s" % [age_years, deposited, tr(type_name)])
 		
-	# 清空携带
-	carried_amount = 0
-	carried_type = -1
-	_target_building = null
-	current_state = AgentState.IDLE
+	# 扣除已存入的数量
+	carried_amount -= deposited
+	
+	if carried_amount <= 0:
+		# 全部存完了，清空状态
+		carried_amount = 0
+		carried_type = -1
+		_target_building = null
+		current_state = AgentState.IDLE
+	else:
+		# 还有没存完的，找下一个仓库
+		_target_building = _find_nearest_valid_storage(carried_type)
+		if _target_building != null:
+			current_state = AgentState.RETURNING_TO_CAVE
+			target_position = _target_building.global_position
+			print("HumanAgent [%d岁]: 此仓库已满，携带剩余 %d 转往下一个仓库" % [age_years, carried_amount])
+		else:
+			# 全世界由于各种原因都没有存储空间了，只好丢在地上成为资源包
+			agent_dropped_items.emit(global_position, carried_type, carried_amount)
+			get_tree().call_group("event_log", "add_log", "滿倉！居民將 %d 單位物資棄置於地" % carried_amount, "#ffaa44")
+			print("HumanAgent [%d岁]: 仓库全满，将剩余 %d 资源丢弃于地" % [age_years, carried_amount])
+			carried_amount = 0
+			carried_type = -1
+			current_state = AgentState.IDLE
 
 
 func _check_death() -> void:

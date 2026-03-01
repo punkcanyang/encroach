@@ -384,6 +384,28 @@ func finish_construction() -> void:
 			manager.finalize_blueprint(self )
 		queue_redraw()
 
+## 取得拆除 / 升級原址取代時，可返還與折抵的總資源
+func get_refund_resources() -> Dictionary:
+	var refunds = {}
+	
+	for type in storage:
+		if storage[type] > 0:
+			refunds[type] = storage[type]
+			
+	var manager = get_node_or_null("/root/World/BuildingManager")
+	if manager != null and manager.has_method("get_building_data"):
+		var data = manager.get_building_data(building_type)
+		var cost_dict = data.get("cost", {})
+		for type in cost_dict:
+			var half_cost = int(floor(cost_dict[type] * 0.5))
+			if half_cost > 0:
+				if refunds.has(type):
+					refunds[type] += half_cost
+				else:
+					refunds[type] = half_cost
+					
+	return refunds
+
 # [For Future AI]
 # =========================
 # 关键假设:

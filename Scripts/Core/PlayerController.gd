@@ -184,7 +184,8 @@ func upgrade_building(old_building: Node2D, next_type: int) -> void:
 	print("PlayerController: 准备进入升级消耗判定，花费配置：", cost_dict)
 	
 	var storages = _get_all_storages()
-	if not _check_global_resources(cost_dict, storages):
+	# 升級判定時，把目前舊建築提供的返還建材也算入財產中核查
+	if not _check_global_resources(cost_dict, storages, old_building):
 		print("PlayerController: 升级拦截 -> 资源不足！无法升级建筑")
 		return
 		
@@ -210,16 +211,29 @@ func _get_all_storages() -> Array[Node2D]:
 	return storages
 
 
-func _check_global_resources(cost_dict: Dictionary, storages: Array[Node2D]) -> bool:
+func _check_global_resources(cost_dict: Dictionary, storages: Array[Node2D], refund_building: Node2D = null) -> bool:
 	if cost_dict.is_empty(): return true
+	
+	# 如果有升級或替換等原址拆除建築，要將它的退還物資算作本次的「預借津貼」
+	var refunds: Dictionary = {}
+	if refund_building != null and refund_building.has_method("get_refund_resources"):
+		refunds = refund_building.get_refund_resources()
+		
 	for type in cost_dict:
 		var req = cost_dict[type]
 		var total_owned = 0
+		
+		# 加上預借津貼
+		if refunds.has(type):
+			total_owned += refunds[type]
+			
+		# 加上國庫現有
 		for s in storages:
 			if "storage" in s and s.storage.has(type):
 				total_owned += s.storage[type]
+				
 		if total_owned < req:
-			print("PlayerController: 缺乏 %s, 需 %d 实有 %d" % [ResourceTypes.get_type_name(type), req, total_owned])
+			print("PlayerController: 缺乏 %s, 需 %d 实有 %d (含折抵)" % [ResourceTypes.get_type_name(type), req, total_owned])
 			return false
 	return true
 

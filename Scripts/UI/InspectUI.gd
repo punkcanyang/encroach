@@ -214,10 +214,6 @@ func _update_inspect_content() -> void:
 
 
 func _update_upgrade_button() -> void:
-	# 先清空所有旧的升级按钮
-	for child in _actions_container.get_children():
-		child.queue_free()
-		
 	# 控制拆除按钮显示 (山洞、木屋等属于建筑，可拆)
 	var is_building = (_selected_object.name == "Cave" or _selected_object.is_in_group("building"))
 	_demolish_btn.visible = is_building
@@ -231,6 +227,8 @@ func _update_upgrade_button() -> void:
 		is_blueprint = _selected_object.is_blueprint
 		
 	if is_blueprint or current_type == -1 or not UPGRADE_MAP.has(current_type):
+		for child in _actions_container.get_children():
+			child.queue_free()
 		return
 		
 	var next_types = UPGRADE_MAP[current_type]
@@ -238,31 +236,68 @@ func _update_upgrade_button() -> void:
 	if bm == null or not bm.has_method("get_building_data"):
 		return
 		
-	# 遍历生成可升级的按钮
-	for next_type in next_types:
+	# 检查是否需要重建按钮 (数量不符，或者类型不符)
+	var child_count = _actions_container.get_child_count()
+	var needs_rebuild = (child_count != next_types.size())
+	if not needs_rebuild:
+		for i in range(child_count):
+			var btn = _actions_container.get_child(i) as Button
+			if btn == null or btn.get_meta("upgrade_type", -1) != next_types[i]:
+				needs_rebuild = true
+				break
+				
+	if needs_rebuild:
+		# 清空重建
+		for child in _actions_container.get_children():
+			child.queue_free()
+		for next_type in next_types:
+			var btn = Button.new()
+			btn.set_meta("upgrade_type", next_type)
+			btn.add_theme_font_size_override("font_size", 12)
+			btn.custom_minimum_size = Vector2(0, 50)
+			btn.pressed.connect(_on_upgrade_pressed.bind(btn))
+			_actions_container.add_child(btn)
+
+	# 更新按钮状态
+	for i in range(next_types.size()):
+		var next_type = next_types[i]
 		var data = bm.get_building_data(next_type)
 		if data.is_empty(): continue
 			
 		var cost_dict = data.get("cost", {})
+		
+		# ---- 【預檢資源庫存，決定防呆反灰】 ----
+		var can_afford: bool = true
+		if _player_controller != null and _player_controller.has_method("_get_all_storages"):
+			var storages = _player_controller._get_all_storages()
+			can_afford = _player_controller._check_global_resources(cost_dict, storages, _selected_object)
+			
 		var cost_hint = ""
-		var i = 0
+		var count_i = 0
 		for rc in cost_dict:
 			cost_hint += "%s:%d " % [tr(ResourceTypes.get_type_name(rc)), cost_dict[rc]]
-			i += 1
-			if i % 2 == 0:
+			count_i += 1
+			if count_i % 2 == 0:
 				cost_hint += "\n" # 两条换行
 			
 		var next_name = tr(data.get("name", "Unknown"))
 		
-		var btn = Button.new()
-		# 使用 metadata 绑定要传递的值
-		btn.set_meta("upgrade_type", next_type)
-		btn.text = "升级至 %s\n%s" % [next_name, cost_hint.strip_edges()]
-		btn.add_theme_font_size_override("font_size", 12)
-		btn.custom_minimum_size = Vector2(0, 50)
-		btn.pressed.connect(_on_upgrade_pressed.bind(btn))
+		var btn = _actions_container.get_child(i) as Button
+		if btn == null: continue
 		
-		_actions_container.add_child(btn)
+		if not can_afford:
+			btn.text = "升级至 %s (资源不足)\n%s" % [next_name, cost_hint.strip_edges()]
+			btn.disabled = true
+			btn.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN
+			btn.add_theme_color_override("font_color", Color(0.6, 0.3, 0.3))
+			btn.add_theme_color_override("font_disabled_color", Color(0.6, 0.3, 0.3))
+		else:
+			btn.text = "升级至 %s\n%s" % [next_name, cost_hint.strip_edges()]
+			btn.disabled = false
+			btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			btn.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
+			if btn.has_theme_color_override("font_disabled_color"):
+				btn.remove_theme_color_override("font_disabled_color")
 
 
 func _on_upgrade_pressed(btn: Button) -> void:

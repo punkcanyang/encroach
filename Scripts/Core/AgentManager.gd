@@ -133,7 +133,7 @@ func add_agent(position: Vector2, _ignored_min: int = 10, _ignored_max: int = 20
 	
 	var pop_idx = agents.size()
 	var lf_years = int(agent.lifespan_days / 365.0)
-	get_tree().call_group("event_log", "add_log", "第 %d 名居民誕生了 (壽命約 %d)", "#88ff88" % [pop_idx, lf_years])
+	get_tree().call_group("event_log", "add_log", "第 %d 名居民誕生了 (壽命約 %d年)" % [pop_idx, lf_years], "#88ff88")
 	
 	return agent
 

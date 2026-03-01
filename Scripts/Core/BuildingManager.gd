@@ -332,20 +332,16 @@ func remove_building(building: Node2D) -> void:
 		building.queue_free()
 
 
-## 拆除建筑并返还 50% 资源（原地掉落包裹）
+## 拆除建筑并返还 50% 资源以及内部余粮（原地掉落包裹）
 func remove_building_with_refund(building: Node2D) -> void:
 	if not is_instance_valid(building): return
 	
-	if "building_type" in building:
-		var current_type = building.building_type
-		var data = get_building_data(current_type)
-		if not data.is_empty():
-			var cost_dict = data.get("cost", {})
-			# 计算需返还的资源
-			for res_type in cost_dict:
-				var refund_amount = int(floor(cost_dict[res_type] * 0.5))
-				if refund_amount > 0:
-					_spawn_resource_drop(res_type, refund_amount, building.global_position)
+	if building.has_method("get_refund_resources"):
+		var refunds = building.get_refund_resources()
+		for res_type in refunds:
+			var refund_amount = refunds[res_type]
+			if refund_amount > 0:
+				_spawn_resource_drop(res_type, refund_amount, building.global_position)
 	
 	remove_building(building)
 
