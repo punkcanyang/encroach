@@ -254,6 +254,23 @@ func exit_build_mode() -> void:
 	queue_redraw()
 
 
+func demolish_building(building: Node2D) -> void:
+	if _building_manager == null or not is_instance_valid(building): return
+	
+	# 双重保险，防止拆除野生资源或其他不该拆除的物件
+	var is_building = building.name == "Cave" or building.is_in_group("building")
+	if not is_building:
+		print("PlayerController: 拦截拆除 -> 目标不是合法建筑 %s" % building.name)
+		return
+		
+	# 交由 BuildingManager 处理带返还包裹的拆除逻辑
+	print("PlayerController: 玩家发起建筑拆除指令 -> %s" % building.name)
+	if _building_manager.has_method("remove_building_with_refund"):
+		_building_manager.remove_building_with_refund(building)
+	else:
+		_building_manager.remove_building(building)
+
+
 func _draw() -> void:
 	if current_build_type != -1:
 		var color = Color(0.2, 0.8, 0.2, 0.4) if _is_preview_valid else Color(0.8, 0.2, 0.2, 0.4)

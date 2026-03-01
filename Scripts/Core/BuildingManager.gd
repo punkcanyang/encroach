@@ -321,7 +321,7 @@ func finalize_blueprint(building: Node2D) -> void:
 					print("BuildingManager: 建筑落成，自动生成 %d 个人口" % spawn_count)
 
 
-## 移除建筑（拆除）
+## 移除建筑（拆除）不返还资源
 func remove_building(building: Node2D) -> void:
 	if building in buildings:
 		buildings.erase(building)
@@ -330,6 +330,54 @@ func remove_building(building: Node2D) -> void:
 	elif building in blueprints:
 		blueprints.erase(building)
 		building.queue_free()
+
+
+## 拆除建筑并返还 50% 资源（原地掉落包裹）
+func remove_building_with_refund(building: Node2D) -> void:
+	if not is_instance_valid(building): return
+	
+	if "building_type" in building:
+		var current_type = building.building_type
+		var data = get_building_data(current_type)
+		if not data.is_empty():
+			var cost_dict = data.get("cost", {})
+			# 计算需返还的资源
+			for res_type in cost_dict:
+				var refund_amount = int(floor(cost_dict[res_type] * 0.5))
+				if refund_amount > 0:
+					_spawn_resource_drop(res_type, refund_amount, building.global_position)
+	
+	remove_building(building)
+
+
+## 内部辅助：在世界中生成资源掉落
+func _spawn_resource_drop(res_type: int, amount: int, origin_pos: Vector2) -> void:
+	if amount <= 0: return
+	
+	var resource_script = load("res://Scripts/Entities/Resource.gd")
+	if resource_script == null: return
+	
+	var res_node = Node2D.new()
+	res_node.set_script(resource_script)
+	res_node.resource_type = res_type
+	res_node.amount = amount
+	res_node.max_amount = amount
+	res_node.difficulty = 1
+	res_node.collection_radius = 50.0
+	
+	# 动态名称与随机轻微偏移
+	res_node.name = "DroppedResource_%s_%d" % [str(res_type), Time.get_ticks_msec()]
+	var offset = Vector2(randf_range(-40, 40), randf_range(-40, 40))
+	res_node.position = origin_pos + offset
+	
+	# 检查是否越界
+	var generator = _world.get_node_or_null("WorldGenerator")
+	if generator != null and generator.has_method("get_world_rect"):
+		res_node.global_position.x = clamp(res_node.global_position.x, generator.get_world_rect().position.x, generator.get_world_rect().position.x + generator.get_world_rect().size.x)
+		res_node.global_position.y = clamp(res_node.global_position.y, generator.get_world_rect().position.y, generator.get_world_rect().position.y + generator.get_world_rect().size.y)
+	
+	_world.call_deferred("add_child", res_node)
+	print("BuildingManager: 拆除返还掉落资源 [%s] x%d" % [ResourceTypes.get_type_name(res_type), amount])
 
 
 # [For Future AI]

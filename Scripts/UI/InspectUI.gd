@@ -12,19 +12,22 @@ extends Control
 const PANEL_SIZE: Vector2 = Vector2(280, 220)
 const PANEL_POS: Vector2 = Vector2(20, 100) # 左上角偏下固定位置
 
-## 建筑升级路线图: [旧BuildingType] -> [新BuildingType]
+## 建筑升级路线图: [旧BuildingType] -> Array[新BuildingType]
 const UPGRADE_MAP: Dictionary = {
-	4: 1, # CAVE -> WOODEN_HUT
-	1: 2, # WOODEN_HUT -> STONE_HOUSE
-	2: 3 # STONE_HOUSE -> RESIDENCE
+	4: [1, 2, 3], # CAVE -> WOODEN_HUT, STONE_HOUSE, RESIDENCE
+	1: [2, 3], # WOODEN_HUT -> STONE_HOUSE, RESIDENCE
+	2: [3] # STONE_HOUSE -> RESIDENCE
 }
 
 ## UI 节点引用
 var _info_panel: Panel = null
 var _title_label: Label = null
 var _content_label: RichTextLabel = null
-var _upgrade_btn: Button = null
 var _close_btn: Button = null
+
+## 动态交互操作区
+var _actions_container: VBoxContainer = null
+var _demolish_btn: Button = null
 
 ## 内部状态
 var _selected_object: Node2D = null
@@ -71,7 +74,7 @@ func _create_ui_nodes() -> void:
 	# 内容区 (更换为富文本以支持配色与粗体)
 	_content_label = RichTextLabel.new()
 	_content_label.position = Vector2(10, 45)
-	_content_label.size = Vector2(PANEL_SIZE.x - 20, PANEL_SIZE.y - 120)
+	_content_label.size = Vector2(PANEL_SIZE.x - 20, 90) # 缩小文本区域，留给下方滚动清单
 	_content_label.add_theme_font_size_override("normal_font_size", 14)
 	_content_label.add_theme_font_size_override("bold_font_size", 14)
 	_content_label.bbcode_enabled = true
@@ -79,14 +82,31 @@ func _create_ui_nodes() -> void:
 	_content_label.scroll_active = false
 	_info_panel.add_child(_content_label)
 	
-	# 升级按钮
-	_upgrade_btn = Button.new()
-	_upgrade_btn.position = Vector2(10, PANEL_SIZE.y - 70)
-	_upgrade_btn.size = Vector2(PANEL_SIZE.x - 20, 60)
-	_upgrade_btn.add_theme_font_size_override("font_size", 14)
-	_upgrade_btn.pressed.connect(_on_upgrade_pressed)
-	_upgrade_btn.visible = false # 默认隐藏
-	_info_panel.add_child(_upgrade_btn)
+	# 动态操作区 (ScrollContainer -> VBoxContainer)
+	var scroll = ScrollContainer.new()
+	scroll.position = Vector2(10, 140)
+	scroll.size = Vector2(PANEL_SIZE.x - 20, PANEL_SIZE.y - 150)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_info_panel.add_child(scroll)
+	
+	_actions_container = VBoxContainer.new()
+	_actions_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_actions_container)
+	
+	# 拆除按钮（常驻但由逻辑控制隐藏）
+	_demolish_btn = Button.new()
+	_demolish_btn.text = "拆除建筑 (返还50%资源)"
+	_demolish_btn.add_theme_font_size_override("font_size", 14)
+	_demolish_btn.add_theme_color_override("font_color", Color(1, 0.4, 0.4))
+	_demolish_btn.pressed.connect(_on_demolish_pressed)
+	_demolish_btn.visible = false
+	_info_panel.add_child(_demolish_btn)
+	# 把拆除按钮放在整个面板的最底部，盖在滚动条下面
+	_demolish_btn.position = Vector2(10, PANEL_SIZE.y - 7) # 这个位置实际上跑到面版外面了一点，调整面版大小
+	_info_panel.size.y = PANEL_SIZE.y + 35
+	# 更正上面：我们将_info_panel 高度调大到 255，拆除按钮放在 220 处
+	_demolish_btn.position = Vector2(10, PANEL_SIZE.y)
+	_demolish_btn.size = Vector2(PANEL_SIZE.x - 20, 30)
 
 
 func _on_building_selected(target: Node2D) -> void:
@@ -194,7 +214,15 @@ func _update_inspect_content() -> void:
 
 
 func _update_upgrade_button() -> void:
-	# 只处理特定包含 building_type 的对象 (且非施工状态)
+	# 先清空所有旧的升级按钮
+	for child in _actions_container.get_children():
+		child.queue_free()
+		
+	# 控制拆除按钮显示 (山洞、木屋等属于建筑，可拆)
+	var is_building = (_selected_object.name == "Cave" or _selected_object.is_in_group("building"))
+	_demolish_btn.visible = is_building
+		
+	# 提取状态判断升级条件
 	var current_type: int = -1
 	var is_blueprint: bool = false
 	if "building_type" in _selected_object:
@@ -203,48 +231,56 @@ func _update_upgrade_button() -> void:
 		is_blueprint = _selected_object.is_blueprint
 		
 	if is_blueprint or current_type == -1 or not UPGRADE_MAP.has(current_type):
-		_upgrade_btn.visible = false
 		return
 		
-	var next_type = UPGRADE_MAP[current_type]
+	var next_types = UPGRADE_MAP[current_type]
 	var bm = get_node_or_null("/root/World/BuildingManager")
 	if bm == null or not bm.has_method("get_building_data"):
-		_upgrade_btn.visible = false
 		return
 		
-	var data = bm.get_building_data(next_type)
-	if data.is_empty():
-		_upgrade_btn.visible = false
-		return
+	# 遍历生成可升级的按钮
+	for next_type in next_types:
+		var data = bm.get_building_data(next_type)
+		if data.is_empty(): continue
+			
+		var cost_dict = data.get("cost", {})
+		var cost_hint = ""
+		var i = 0
+		for rc in cost_dict:
+			cost_hint += "%s:%d " % [tr(ResourceTypes.get_type_name(rc)), cost_dict[rc]]
+			i += 1
+			if i % 2 == 0:
+				cost_hint += "\n" # 两条换行
+			
+		var next_name = tr(data.get("name", "Unknown"))
 		
-	var cost_dict = data.get("cost", {})
-	var cost_hint = ""
-	var i = 0
-	for rc in cost_dict:
-		cost_hint += "%s: %d" % [tr(ResourceTypes.get_type_name(rc)), cost_dict[rc]]
-		i += 1
-		if i % 2 == 0:
-			cost_hint += "\n" # 每两个换一行
-		else:
-			cost_hint += "   "
+		var btn = Button.new()
+		# 使用 metadata 绑定要传递的值
+		btn.set_meta("upgrade_type", next_type)
+		btn.text = "升级至 %s\n%s" % [next_name, cost_hint.strip_edges()]
+		btn.add_theme_font_size_override("font_size", 12)
+		btn.custom_minimum_size = Vector2(0, 50)
+		btn.pressed.connect(_on_upgrade_pressed.bind(btn))
 		
-	var next_name = tr(data.get("name", "Unknown"))
-	_upgrade_btn.text = "升级至  %s\n─ 需求建材 ─\n%s" % [next_name, cost_hint.strip_edges()]
-	_upgrade_btn.visible = true
+		_actions_container.add_child(btn)
 
 
-func _on_upgrade_pressed() -> void:
+func _on_upgrade_pressed(btn: Button) -> void:
 	if _selected_object == null or not is_instance_valid(_selected_object): return
 	if not "building_type" in _selected_object: return
 	
-	var current_type = _selected_object.building_type
-	if UPGRADE_MAP.has(current_type):
-		var next_type = UPGRADE_MAP[current_type]
-		if _player_controller != null and _player_controller.has_method("upgrade_building"):
-			# 发起升级
-			_player_controller.upgrade_building(_selected_object, next_type)
-			# 升级后它变成蓝图了（由于原址翻修），我们最好关掉面板
-			_on_close_pressed()
+	var next_type = btn.get_meta("upgrade_type")
+	if _player_controller != null and _player_controller.has_method("upgrade_building"):
+		_player_controller.upgrade_building(_selected_object, next_type)
+		_on_close_pressed()
+
+
+func _on_demolish_pressed() -> void:
+	if _selected_object == null or not is_instance_valid(_selected_object): return
+	
+	if _player_controller != null and _player_controller.has_method("demolish_building"):
+		_player_controller.demolish_building(_selected_object)
+		_on_close_pressed()
 
 
 ## 格式化山洞信息

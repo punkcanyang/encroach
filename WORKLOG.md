@@ -107,3 +107,22 @@
   2. 将 `DAYS_PER_YEAR` 从 365 压缩至 **10**，同步调整 `BuildingManager.BUILDING_DATA` 中所有 `spawn_interval_days`（山洞:100, 木屋:80, 石屋:50, 大楼:10）。
   3. 将 `AgentManager.add_agent` 中寿命乘数从 `*365` 改为 `*10`。
 - **效果**：玩家现在挂机几分钟即可观察到完整的代际更替（出生、繁荣、老死、遗物掉落）。
+
+## 2026-03-01 17:19:39 - 資源與建築系統雙重機制實作
+
+### 實作內容 (Implementation):
+1. **野生資源枯竭與降級機制 (規則集5)**
+   - 修改 `Resource.gd` 中的 `collect` 方法。
+   - 實作 `_apply_degradation` 平滑更新資源狀態。
+   - 貴金屬 (採空) -> 工業金屬 (採空) -> 土礦 (採空) -> 消失。
+2. **建築拆除與資源返還 (規則集7 補完)**
+   - 在 `BuildingManager.gd` 增加 `remove_building_with_refund()` 邏輯。
+   - 拆除時根據建構成本動態 `_spawn_resource_drop` 返還 50% 資源包裹至原地附近。
+   - `InspectUI.gd` 中新增「拆除建築」的紅色常駐按鈕以供點擊觸發 `PlayerController.demolish_building`。
+3. **住所升級路線展開**
+   - 修改 `InspectUI.gd` 內部按鈕產生結構，由單一按鈕改為動態 `VBoxContainer`。
+   - 支援顯示陣列升級路線 (`UPGRADE_MAP`)，例如山洞可直接並排顯示木屋、石屋、大樓的升級選項。
+
+### 未來待辦 (TODO):
+- 需要玩家手動進入遊戲 Play 驗證，上述實作已於代碼層面保護且編譯無誤，但 Godot 目前的渲染環境限制了進一步的主動自動化測試。
+- 下一階段可繼續進行 `TODO.md` 中的「時間速度控制（暫停/快進）」。

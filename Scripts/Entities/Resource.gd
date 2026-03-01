@@ -95,8 +95,18 @@ func collect(requested_amount: int, collector: Node2D) -> int:
 	
 	if amount <= 0:
 		resource_depleted.emit()
-		print("Resource: %s 资源已耗尽，位置: %s - 正在消失" % [_get_type_name(), str(global_position)])
-		call_deferred("_deferred_free")
+		
+		# 检查是否需要降级
+		if resource_type == ResourceType.PREC_METAL:
+			print("Resource: %s 资源耗尽，降级为 %s - 位置: %s" % [_get_type_name(), ResourceTypes.get_type_name(ResourceType.IND_METAL), str(global_position)])
+			_apply_degradation(ResourceType.IND_METAL)
+		elif resource_type == ResourceType.IND_METAL:
+			print("Resource: %s 资源耗尽，降级为 %s - 位置: %s" % [_get_type_name(), ResourceTypes.get_type_name(ResourceType.DIRT), str(global_position)])
+			_apply_degradation(ResourceType.DIRT)
+		else:
+			# FOOD 或 DIRT 挖空即消失
+			print("Resource: %s 资源已耗尽，位置: %s - 正在消失" % [_get_type_name(), str(global_position)])
+			call_deferred("_deferred_free")
 	
 	return actual_amount
 
@@ -104,6 +114,24 @@ func collect(requested_amount: int, collector: Node2D) -> int:
 ## 延迟销毁
 func _deferred_free() -> void:
 	queue_free()
+
+
+## 應用資源降級
+func _apply_degradation(new_type: int) -> void:
+	resource_type = new_type
+	# 恢復滿值
+	amount = max_amount
+	
+	# 更新 UI 顯示 (Icon、字體顏色與大小)
+	_icon_label.text = ResourceTypes.get_type_icon(resource_type)
+	var scale_factor: float = 1.0 + (amount / 5000.0) * 1.5
+	var base_font_size: int = 24
+	_icon_label.add_theme_font_size_override("font_size", int(base_font_size * scale_factor))
+	_icon_label.add_theme_color_override("font_color", _get_resource_color())
+	_icon_label.position = Vector2(-base_font_size * scale_factor * 0.5, -base_font_size * scale_factor * 0.5)
+	
+	# 通知可能連接了我們並監聽庫存狀態的世界面板
+	queue_redraw()
 
 
 ## 补充资源
