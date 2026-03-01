@@ -138,6 +138,13 @@ func get_status() -> Dictionary:
 	return status
 
 
+## WHY: 蓝图竣工后 _ready 不会再执行，必须在此处手动绑定时间系统信号
+func _on_construction_finished() -> void:
+	super._on_construction_finished()
+	_connect_to_systems()
+	print("🏠 %s: 竣工！已连接时间系统，开始计算繁衍周期" % name)
+
+
 func _on_day_passed(_current_day: int) -> void:
 	if is_blueprint:
 		return
@@ -156,7 +163,7 @@ func _on_day_passed(_current_day: int) -> void:
 
 ## 尝试由此建筑生成新人类
 func _try_spawn_human() -> void:
-	if _agent_manager != null and _agent_manager.agents.size() >= _agent_manager.get_parent().get_node("Cave").get_max_population():
+	if _agent_manager != null and _agent_manager.agents.size() >= _agent_manager.get_max_population():
 		spawn_failed.emit("人口已达全局上限")
 		return
 

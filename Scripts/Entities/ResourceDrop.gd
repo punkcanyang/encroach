@@ -46,7 +46,7 @@ func is_depleted() -> bool:
 	return _is_depleted
 
 ## Interface: 鸭子类型伪装野生矿脉
-func collect(requested_amount: int) -> int:
+func collect(requested_amount: int, _collector: Node2D = null) -> int:
 	if _is_depleted: return 0
 	
 	# 吸干机制：能拿多少拿多少

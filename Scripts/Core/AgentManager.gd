@@ -120,7 +120,7 @@ func add_agent(position: Vector2, _ignored_min: int = 10, _ignored_max: int = 20
 	
 	# 从外部赋值重写 HumanAgent 的寿命设定，取决于最高建筑
 	var lifespan_range = _get_global_lifespan_range()
-	agent.lifespan_days = randi_range(int(lifespan_range.x), int(lifespan_range.y)) * 10
+	agent.lifespan_days = randi_range(int(lifespan_range.x), int(lifespan_range.y)) * 365
 	agent.agent_died.connect(_on_agent_died)
 	agent.agent_dropped_items.connect(_on_agent_dropped_items)
 	
