@@ -194,6 +194,7 @@ func _try_spawn_human() -> void:
 		human_spawned.emit(new_human)
 		var b_name = get_node("/root/World/BuildingManager").get_building_data(building_type).get("name", "住所")
 		print("🏠 %s: 居民新生儿降生！消耗库存食物 %d" % [tr(b_name), FOOD_COST_PER_HUMAN])
+		get_tree().call_group("event_log", "add_log", "🏠 [%s] 迎接了一名新生命！" % tr(b_name), "#88ffaa")
 		queue_redraw()
 	else:
 		# 生成失败则回退食物

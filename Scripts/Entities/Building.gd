@@ -71,6 +71,14 @@ func start_construction(required: float) -> void:
 	construction_progress = 0.0
 	work_required = required
 	queue_redraw()
+	
+	# 推送日志
+	var b_name: String = "建筑"
+	var manager = get_node_or_null("/root/World/BuildingManager")
+	if manager != null and manager.has_method("get_building_data"):
+		var data = manager.get_building_data(building_type)
+		b_name = tr(data.get("name", "建筑"))
+	get_tree().call_group("event_log", "add_log", "开始修筑 %s 蓝图..." % b_name, "#5588aa")
 
 
 ## 增加施工进度（被 Agent 交互时调用）
@@ -92,9 +100,14 @@ func finish_construction() -> void:
 		is_blueprint = false
 		construction_progress = work_required
 		
+		# 推送日志
+		var b_name: String = "建筑"
 		var manager = get_node_or_null("/root/World/BuildingManager")
-		if manager != null and manager.has_method("finalize_blueprint"):
+		if manager != null and manager.has_method("get_building_data"):
+			b_name = tr(manager.get_building_data(building_type).get("name", "建筑"))
 			manager.finalize_blueprint(self )
+		
+		get_tree().call_group("event_log", "add_log", "🎉 %s 建造完成！" % b_name, "#00ccff")
 			
 		_on_construction_finished()
 		queue_redraw()

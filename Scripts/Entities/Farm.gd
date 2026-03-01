@@ -99,8 +99,13 @@ func collect(requested_amount: int, _collector: Node2D) -> int:
 	
 	queue_redraw()
 	
+	var actual_yield = min(final_yield, requested_amount)
+	
+	# 推送日志
+	get_tree().call_group("event_log", "add_log", "🌾 农田完成了一次收割 (+%d 食物)" % actual_yield, "#bbffaa")
+	
 	# 返回实际产量（限制在请求范围内）
-	return min(final_yield, requested_amount)
+	return actual_yield
 
 
 ## 伪装成 Resource 的 is_depleted 接口
@@ -126,9 +131,19 @@ func get_status() -> Dictionary:
 	return status
 
 
+## 回传给 Agent 的吸引力分数 (引力系统)
+func get_attraction_weight() -> float:
+	if is_blueprint:
+		return 0.0 # 蓝图自有 150 基础分
+	if is_ready:
+		return 2000.0 # 成熟的农田散发极高引力，吸引全图闲余 AI 收割
+	return 0.0
+
+
 # [For Future AI]
 # =========================
 # 关键假设:
 # 1. 农田独立处理 _process 内的生长逻辑，成熟后停止生长
 # 2. 如果是蓝图，Agent "harvest" 动作实际上是充当施工
 # 3. 熟练度直接绑定在具体建筑实例上
+# 4. get_attraction_weight() 会被 HumanAgent 调用以计算采集优先级

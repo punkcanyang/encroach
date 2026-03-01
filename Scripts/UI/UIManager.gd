@@ -40,6 +40,39 @@ func _ready() -> void:
 		print("UIManager: 成功通过代码动态挂载 InspectUI")
 	else:
 		push_error("UIManager: 无法加载 InspectUI 脚本")
+		
+	# 创建 Agent 统计面板 AgentStatsUI
+	var agent_stats_ui = PanelContainer.new()
+	agent_stats_ui.name = "AgentStatsUI"
+	var agent_stats_script = load("res://Scripts/UI/AgentStatsUI.gd")
+	if agent_stats_script:
+		agent_stats_ui.set_script(agent_stats_script)
+		add_child(agent_stats_ui)
+		print("UIManager: 成功通过代码动态挂载 AgentStatsUI")
+	else:
+		push_error("UIManager: 无法加载 AgentStatsUI 脚本")
+		
+	# 创建 建筑清单总览 BuildingListUI
+	var b_list_ui = PanelContainer.new()
+	b_list_ui.name = "BuildingListUI"
+	var b_list_script = load("res://Scripts/UI/BuildingListUI.gd")
+	if b_list_script:
+		b_list_ui.set_script(b_list_script)
+		add_child(b_list_ui)
+		print("UIManager: 成功通过代码动态挂载 BuildingListUI")
+	else:
+		push_error("UIManager: 无法加载 BuildingListUI 脚本")
+
+	# 创建 滚动事件日志 EventLogUI
+	var evt_log_ui = MarginContainer.new()
+	evt_log_ui.name = "EventLogUI"
+	var evt_log_script = load("res://Scripts/UI/EventLogUI.gd")
+	if evt_log_script:
+		evt_log_ui.set_script(evt_log_script)
+		add_child(evt_log_ui)
+		print("UIManager: 成功通过代码动态挂载 EventLogUI")
+	else:
+		push_error("UIManager: 无法加载 EventLogUI 脚本")
 
 
 ## 处理全局输入
@@ -48,6 +81,20 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		_toggle_settings()
 		get_viewport().set_input_as_handled()
+		
+	# 按 C 键打开/关闭 Agent 状态统计面板
+	if event is InputEventKey and event.pressed and event.keycode == KEY_C:
+		var agent_stats = get_node_or_null("AgentStatsUI")
+		if agent_stats and agent_stats.has_method("toggle_panel"):
+			agent_stats.toggle_panel()
+			get_viewport().set_input_as_handled()
+			
+	# 按 B 键打开/关闭 建筑清单面板
+	if event is InputEventKey and event.pressed and event.keycode == KEY_B:
+		var block = get_node_or_null("BuildingListUI")
+		if block and block.has_method("toggle_panel"):
+			block.toggle_panel()
+			get_viewport().set_input_as_handled()
 
 
 ## 切换设置界面

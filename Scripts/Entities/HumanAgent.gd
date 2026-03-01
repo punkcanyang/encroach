@@ -160,10 +160,16 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, AGENT_RADIUS, display_color)
 	draw_circle(Vector2.ZERO, AGENT_RADIUS, Color.WHITE, false, 1.0)
 
-	# WHY: 携带资源时头顶绘制对应颜色的小点
+	# WHY: 携带资源时头顶绘制对应颜色的小点以及重量数字
 	if carried_amount > 0:
 		var carry_color: Color = _get_carry_indicator_color()
-		draw_circle(Vector2(0, -AGENT_RADIUS - 3), 3.0, carry_color)
+		# 绘制小点
+		draw_circle(Vector2(0, -AGENT_RADIUS - 6), 3.0, carry_color)
+		# 绘制数字
+		var font = ThemeDB.fallback_font
+		if font != null:
+			var text_str = "+%d" % carried_amount
+			draw_string(font, Vector2(5, -AGENT_RADIUS - 2), text_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, carry_color)
 
 
 ## 根据携带的资源类型返回指示器颜色
@@ -201,6 +207,9 @@ func _on_day_passed(_current_day: int) -> void:
 		hp -= 5.0
 		var display_cause: String = "严重饥饿 (-5 HP)"
 		print("HumanAgent [%d岁%d天]: 遭受 %s，剩余 HP: %d/%d" % [age_years, age_days % DAYS_PER_YEAR, display_cause, int(hp), int(max_hp)])
+		if hp == max_hp - 5.0:
+			# 只在第一次因饥饿扣血时显示警告，避免洗版
+			get_tree().call_group("event_log", "add_log", "【警告】一名居民由于饥饿开始流失生命", "#ffaa00")
 
 	# 每天尝试进食
 	if _days_since_last_meal >= 1:
@@ -386,13 +395,23 @@ func _find_and_move_to_nearest_resource() -> void:
 	var safe_food_line: int = pop * 15
 	var can_collect_non_food: bool = (hunger >= HUNGER_THRESHOLD_NON_FOOD) and (total_food >= safe_food_line)
 
-	# --- 2. 遍历资源节点寻找最近目标 ---
+	# --- 新增：取得全局資源短缺權重 ---
+	var resource_weights: Dictionary = {}
+	if _resource_manager != null and _resource_manager.has_method("get_resource_priority_weights"):
+		resource_weights = _resource_manager.get_resource_priority_weights()
+
+	# --- 2. 遍历资源节点寻找最高分目标 ---
+	var highest_score: float = -INF
 	var candidates: Array[Node] = get_tree().get_nodes_in_group("inspectable")
 	
 	for child in candidates:
 		if not child is Node2D: continue
-		if not child.has_method("collect") or not child.has_method("is_depleted"): continue
-		if child.is_depleted(): continue
+		if not child.has_method("collect") and not child.has_method("add_progress"): continue
+		
+		# 是否為採集枯竭確認
+		if child.has_method("is_depleted") and child.is_depleted(): continue
+		# 是否為已完工的藍圖確認
+		if "is_blueprint" in child and not child.is_blueprint and child.has_method("add_progress"): continue
 
 		var res_type: int = child.resource_type if "resource_type" in child else 0
 		
@@ -401,24 +420,45 @@ func _find_and_move_to_nearest_resource() -> void:
 		var max_allowed = MAX_RESERVERS_WILD
 		if child.is_in_group("building"):
 			max_allowed = MAX_RESERVERS_FARM # 后续如果加入其他生产建筑这里可以动态取值
+		if "is_blueprint" in child and child.is_blueprint:
+			max_allowed = MAX_RESERVERS_BLUEPRINT
 		
-		# 强制分流：如果发现该资源点的排队人数已满，直接视而不见（跳过）寻找次远点
+		# 强制分流：如果发现该资源点的排队人数已满，直接视而不见（跳过）
 		if current_reservations >= max_allowed:
 			continue
 		# ------------------------------
 		
-		# 全图无空间存放此资源，跳过
-		if not has_space_for.get(res_type, false):
-			continue
-			
-		# 非食物需满足食物安全线和饱腹度，否则跳过
-		if res_type != ResourceTypes.Type.FOOD:
-			if not can_collect_non_food:
+		# 蓝图不需要存放空间，但采矿需要
+		var is_bp = child.is_blueprint if "is_blueprint" in child else false
+		if not is_bp:
+			# 全图无空间存放此资源，跳过
+			if not has_space_for.get(res_type, false):
 				continue
+				
+			# 非食物需满足食物安全线和饱腹度，否则跳过
+			if res_type != ResourceTypes.Type.FOOD:
+				if not can_collect_non_food:
+					continue
 
+		# --- 3. 評分計算 (Scoring) ---
+		var score: float = 0.0
+		
+		# 3a. 基礎物質極缺權重
+		if not is_bp:
+			score += resource_weights.get(res_type, 0.0)
+		else:
+			score += 150.0 # 藍圖自帶高基礎優先級
+
+		# 3b. 建築特殊引力 (Attraction)
+		if child.has_method("get_attraction_weight"):
+			score += child.get_attraction_weight()
+			
+		# 3c. 距離衰減懲罰 (Distance Penalty)
 		var dist: float = global_position.distance_to(child.global_position)
-		if dist < nearest_dist:
-			nearest_dist = dist
+		score -= dist * 0.2  # 每 1 像素距離扣 0.2 分
+		
+		if score > highest_score:
+			highest_score = score
 			_nearest_resource = child
 
 	# --- 3. 指派移动目标 ---
@@ -441,7 +481,13 @@ func _handle_movement(delta: float) -> void:
 		return
 
 	var direction: Vector2 = (target_position - global_position).normalized()
-	var movement: Vector2 = direction * MOVE_SPEED * delta
+	
+	# 硬核物流：如果身上带了东西，走路变慢 30% 来表现负重感
+	var current_speed = MOVE_SPEED
+	if carried_amount > 0:
+		current_speed = MOVE_SPEED * 0.7
+		
+	var movement: Vector2 = direction * current_speed * delta
 
 	if global_position.distance_to(target_position) <= movement.length():
 		global_position = target_position
@@ -528,9 +574,12 @@ func _check_death() -> void:
 
 func _die(cause: String) -> void:
 	alive = false
-	var cause_text: String = "饿死(生命值耗尽)" if cause == "starvation_hp_depleted" else "寿终正寝"
+	var cause_text: String = "餓死" if cause == "starvation_hp_depleted" else "壽終正寢"
 	var display_years = lifespan_days / float(DAYS_PER_YEAR)
 	print("☠️  HumanAgent [%d岁/%d天寿命]: %s" % [age_years, int(display_years), cause_text])
+
+	var log_color: String = "#ff4444" if cause == "starvation_hp_depleted" else "#888888"
+	get_tree().call_group("event_log", "add_log", "一名居民 (%d歲) %s" % [age_years, cause_text], log_color)
 
 	agent_died.emit(self , cause, age_years)
 	

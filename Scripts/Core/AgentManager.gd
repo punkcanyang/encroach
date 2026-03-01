@@ -130,6 +130,11 @@ func add_agent(position: Vector2, _ignored_min: int = 10, _ignored_max: int = 20
 		agent.update_max_hp(_current_global_max_hp)
 	
 	agent_added.emit(agent)
+	
+	var pop_idx = agents.size()
+	var lf_years = int(agent.lifespan_days / 365.0)
+	get_tree().call_group("event_log", "add_log", "第 %d 名居民誕生了 (壽命約 %d)", "#88ff88" % [pop_idx, lf_years])
+	
 	return agent
 
 
@@ -161,3 +166,46 @@ func remove_agent(agent: Node2D) -> void:
 
 func get_all_agents() -> Array[Node2D]:
 	return agents
+
+
+## 获取全局 Agent 的统计数据，供 UI 面板展示
+func get_agents_statistics() -> Dictionary:
+	var stats: Dictionary = {
+		"total_count": 0,
+		"critical_hunger_count": 0,
+		"average_hunger": 0.0,
+		"average_age_years": 0.0,
+		"state_counts": {}
+	}
+	
+	if agents.size() == 0:
+		return stats
+		
+	var total_hunger: float = 0.0
+	var total_age: float = 0.0
+	
+	for a in agents:
+		if not is_instance_valid(a): continue
+		
+		stats["total_count"] += 1
+		
+		var h = a.hunger if "hunger" in a else 100.0
+		total_hunger += h
+		if h <= 25.0: # HUNGER_THRESHOLD_CRITICAL
+			stats["critical_hunger_count"] += 1
+			
+		var age = a.age_years if "age_years" in a else 0
+		total_age += age
+		
+		if "current_state" in a:
+			var state_str = a._get_state_string(a.current_state) if a.has_method("_get_state_string") else str(a.current_state)
+			if not stats["state_counts"].has(state_str):
+				stats["state_counts"][state_str] = 1
+			else:
+				stats["state_counts"][state_str] += 1
+				
+	if stats["total_count"] > 0:
+		stats["average_hunger"] = total_hunger / stats["total_count"]
+		stats["average_age_years"] = total_age / stats["total_count"]
+		
+	return stats

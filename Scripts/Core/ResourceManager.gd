@@ -90,6 +90,83 @@ func get_cave() -> Node2D:
 	return null
 
 
+## 获取当前世界所有资源的缺乏权重 (用于 AI 采矿评分)
+## 极度匮乏的资源会返回高权重，充裕的返回低权重甚至负数
+func get_resource_priority_weights() -> Dictionary:
+	var weights: Dictionary = {}
+	for type in ResourceTypes.get_all_types():
+		weights[type] = 0.0
+		
+	var world = get_node_or_null("/root/World")
+	if world == null: return weights
+	
+	# 收集所有仓库
+	var storages: Array[Node] = []
+	var cave = get_cave()
+	if cave != null: storages.append(cave)
+	
+	var bm = world.get_node_or_null("BuildingManager")
+	if bm != null and bm.has_method("get_all_buildings"):
+		storages.append_array(bm.get_all_buildings())
+		
+	# 累计总储量和总上限
+	var current_storage: Dictionary = {}
+	var max_storage: Dictionary = {}
+	for t in ResourceTypes.get_all_types():
+		current_storage[t] = 0
+		max_storage[t] = 0
+		
+	var pop = 0
+	var am = world.get_node_or_null("AgentManager")
+	if am != null: pop = am.agents.size()
+		
+	for s in storages:
+		# 排除蓝图
+		var is_bp = s.is_blueprint if "is_blueprint" in s else false
+		if is_bp: continue
+		
+		# 累加库存
+		if "storage" in s and typeof(s.storage) == TYPE_DICTIONARY:
+			for t in s.storage:
+				current_storage[t] += s.storage[t]
+				
+		# 累加上限
+		if s.has_method("get_max_storage_for_type"):
+			for t in ResourceTypes.get_all_types():
+				max_storage[t] += s.get_max_storage_for_type(t)
+		# 兼容老版山洞
+		elif s.has_method("get_max_storage_per_type"):
+			for t in ResourceTypes.get_all_types():
+				max_storage[t] += s.get_max_storage_per_type(t)
+				
+	# 依据容量占比和硬性指标评分计算权重
+	for t in ResourceTypes.get_all_types():
+		var cap = max_storage[t]
+		var cur = current_storage[t]
+		
+		if cap <= 0:
+			# 此阶段或此仓库没有容纳此物项的能力，权重极低 (不要去采)
+			weights[t] = -1000.0
+			continue
+			
+		var ratio = float(cur) / float(cap)
+		
+		# 基础匮乏补偿
+		if ratio < 0.2:
+			weights[t] += 200.0 # 低于 20% 高优
+		elif ratio > 0.8:
+			weights[t] -= 100.0 # 高于 80% 降优
+			
+		# 生存资源特判：如果食物极其危险
+		if t == ResourceTypes.Type.FOOD:
+			var safe_food = pop * 10
+			if cur < safe_food:
+				weights[t] += (safe_food - cur) * 2.0 # 差越多加越多
+				weights[t] += 300.0 # 食物短缺绝对加持
+				
+	return weights
+
+
 # [For Future AI]
 # =========================
 # 关键假设:
