@@ -10,7 +10,7 @@ extends Node2D
 
 
 ## 信号：当资源被采集时发射
-signal resource_collected(amount: int, collector: Node2D)
+signal resource_collected(amount: int, collector: Node)
 
 ## 信号：当资源耗尽时发射
 signal resource_depleted()
@@ -81,7 +81,7 @@ func _ready() -> void:
 
 
 ## 尝试采集资源
-func collect(requested_amount: int, collector: Node2D) -> int:
+func collect(requested_amount: int, collector: Node) -> int:
 	assert(requested_amount > 0, "Resource: 采集数量必须大于 0")
 	assert(collector != null, "Resource: 采集者不能为空")
 	

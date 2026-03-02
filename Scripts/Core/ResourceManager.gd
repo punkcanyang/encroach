@@ -118,7 +118,7 @@ func get_resource_priority_weights() -> Dictionary:
 		
 	var pop = 0
 	var am = world.get_node_or_null("AgentManager")
-	if am != null: pop = am.agents.size()
+	if am != null: pop = am._current_population
 		
 	for s in storages:
 		# 排除蓝图

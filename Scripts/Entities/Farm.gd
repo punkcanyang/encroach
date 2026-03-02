@@ -78,7 +78,7 @@ func _draw() -> void:
 
 
 ## 被 Agent 交互/收割时调用（兼容 Resource 的 collect 接口）
-func collect(requested_amount: int, _collector: Node2D) -> int:
+func collect(requested_amount: int, _collector: Node) -> int:
 	if is_blueprint:
 		# 蓝图态被敲击相当于推进建造进度
 		add_progress(10.0) # 假设每次敲击 10 进度

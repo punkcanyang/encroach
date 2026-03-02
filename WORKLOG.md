@@ -213,3 +213,73 @@
 
 ### 未來待辦 (TODO):
 - 進展至最後一個核心項目：【規則集8】領地輻射與異族戰爭，或補齊建築清單與更多地形。
+
+6. **大規模效能最佳化：ECS-lite 巨型重構 (The Grand Migration)**
+   - **痛點**：原本每一名小人 (HumanAgent) 都是一個 `Node2D` 實體，這在前期數十人時尚可負擔，但在後期目標為「數千人」的場景中，每個 Node 都在獨立呼叫 `_process` 與迴圈找資源，效能將迅速面臨天花板。
+   - **Data Degradation (資料降級)**：實作「物件導向」至「資料導向 (SoA)」的轉換。廢除了原有的 `HumanAgent.tscn`，將狀態管理從單一物件解偶，移入 `AgentManager` 的九個 `PackedArray` 中（例如 `agent_positions`, `agent_hunger` 等）。統一交由單一的 `_process` 迴圈批次結算生命週期、決策以及位移。
+   - **Batch Rendering (批次渲染)**：引入 `MultiMeshInstance2D`，透過寫入實體矩陣 `Transform2D` 以達到 $O(1)$ Draw Call 的極致繪圖效能，讓上千名 Agent 得以流暢現身於螢幕。
+   - **Mocking UI Interfaces (偽裝回調點選)**：修改 `PlayerController` 與 `InspectUI`，利用空間幾何距離測算直接掃描 `agent_positions` 陣列，並在玩家點下鼠標時現場合成一個僅供唯讀取讀的 `MockAgent` `Dictionary` 讓 UI 能與以往無縫接軌顯示資訊。
+
+## 2026-03-02 09:15:00 - 修復：AgentManager 移動常數缺失
+
+### 實作內容 (Implementation):
+1. **補全變數宣告**
+   - 修復了 `Error at (345, 33): Identifier "MOVE_SPEED" not declared in the current scope.` 引發的編譯錯誤。
+   - 由於稍早進行了 ECS-lite 巨型重構，將 `HumanAgent` 遷移至 `AgentManager`，遺漏了 `MOVE_SPEED` 常數的遷移。現已於 `AgentManager.gd` 開頭補回 `const MOVE_SPEED: float = 300.0`。
+
+## 2026-03-02 09:17:00 - 修復：初始生成 Agent 之型態錯誤
+
+### 實作內容 (Implementation):
+1. **修正指派型態錯誤**
+   - 修復了 `E 0:00:00:648   _generate_initial_human: Trying to assign value of type 'int' to a variable of type 'Node2D'.` 引發的運行時錯誤。
+   - 由於稍早進行了 ECS-lite 巨型重構，`AgentManager.add_agent()` 的回傳值已從原本的 `Node2D` (實體 Node) 改為 `int` (在 PackedArray 中的 Index ID)。因此修改了 `WorldGenerator.gd` 中 `_generate_initial_human` 函式的變數型態與判斷邏輯，改為接收並印出此 Index ID。
+
+## 2026-03-02 09:21:00 - 修復：總人口面板型態存取錯誤
+
+### 實作內容 (Implementation):
+1. **修正陣列存取邏輯**
+   - 修復了 `E 0:00:00:603 _setup_connections: Invalid access to property or key 'agents' on a base object of type 'Node (AgentManager.gd)'` 錯誤。
+   - 由於 ECS-lite 巨型重構中，`AgentManager` 廢除了作為實體 Node 儲存的 `agents` 屬性陣列。已將 `StatsPanel.gd` 當中取得人口數的地方同步改為讀取 `_current_population` 變數。
+
+## 2026-03-02 09:24:00 - 修復：資源管理器型態存取錯誤
+
+### 實作內容 (Implementation):
+1. **修正陣列存取邏輯**
+   - 修復了 `get_resource_priority_weights: Invalid access to property or key 'agents' on a base object of type 'Node (AgentManager.gd)'` 錯誤。
+   - 此問題同樣肇因於 ECS-lite 巨型重構。`ResourceManager.gd` 當中用來計算居民當前維生食物指標的人口全域變數讀取已同步調整為 `_current_population`。
+
+## 2026-03-02 09:28:00 - 修復：實體採集參數型別衝突
+
+### 實作內容 (Implementation):
+1. **修正介面參數型別 (Interface Parameter Types)**
+   - 修復了 `E 0:00:05:357 _collect_resource_for_agent: Invalid type in function 'collect' in base 'Node2D (Resource.gd)'.` 的錯誤。
+   - 由於原先在「物件導向」時期，負責執行採集邏輯發起的是繼承自 `Node2D` 的 `HumanAgent`，因此 `collect(amount, collector: Node2D)` 約束了接收型別。
+   - 但在 ECS-lite 重構後，負責統一調度所有 AI 的是 `AgentManager.gd` 本身，其繼承自更基礎的 `Node`。當傳入 `self` 時引發了不相容崩潰。
+   - 已將 `Resource.gd`, `Farm.gd`, `ResourceDrop.gd` 的 `collect` 介面及其信號參數完全放寬至接收基礎的 `Node` 型別。
+
+## 2026-03-02 09:33:00 - 修復：居民無視藍圖與升級罷工問題
+
+### 實作內容 (Implementation):
+1. **補全藍圖掃瞄隊列**
+   - 發現玩家在「升級」或「新建」建築時出現了施工藍圖，但所有的 AI 閒置時都不會啟程去敲擊施工，導致建築永遠卡在原地的問題。
+   - 問題出在 `AgentManager.gd` 的 `_find_nearest_resource_for_agent` 函式中，傳入的 `candidates` 陣列只有 `inspectable` 標籤的純野生資源（如果樹與小金礦），完全遺漏了由 `BuildingManager` 收容的 `blueprints`（藍圖列）。
+   - 已透過動態擷取 `bm.get_all_blueprints()` 並將其聯集入搜尋陣列，讓 AI 重新把推進藍圖的工作與採集並量齊觀。
+
+## 2026-03-02 09:44:00 - 修復：部分藍圖升級卡死 (抵達後發呆)
+
+### 實作內容 (Implementation):
+1. **同步抵達後的敲擊目標隊列**
+   - 玩家回報在上一版修復後，依然有「第一棟成功升級，後續卻卡住」的狀況。
+   - 經追蹤 FSM 狀態機，發現 `_find_nearest_resource_for_agent` 雖然修好了「把藍圖納入尋路」，但當 AI 走完路徑切換到狀態 `3: COLLECT` 時，所呼叫的 `_collect_resource_for_agent(idx, candidates)` 用的依然是不包含藍圖的舊陣列。
+   - 導致 AI 抵達工地後，在清單裡找不到工地，於是瞬間放棄並將狀態洗白為 `0: IDLE`。下一幀它 `IDLE` 又再次接到了這個工地任務，如此陷入永無止盡的「發呆迴圈」。
+   - 已在 `AgentManager.gd` 的 `_update_agent_state_machine` 將傳入的打擊目標同步聯集 `blueprints` 陣列，徹底根絕卡死問題。
+
+## 2026-03-02 09:50:00 - 修復：無限重複點擊升級與異常扣款問題
+
+### 實作內容 (Implementation):
+1. **防呆限制與扣款修復**
+   - 玩家回報建築升級按鈕按下後，在 UI 消失前的微小間隙可以「重複雙擊」，且升級常常表現出「未實際施工」。這是一個非常危險的雙重耗費與狀態不一致漏洞。
+   - **UI 修正**：在 `InspectUI.gd` 中加入了 `btn.disabled = true` 的同步防護，確保點下的第一幀按鈕即失效。
+   - **底層扣款邏輯 (`PlayerController.gd`) 修正**：先前我們將「拆除原建築返還的 50% 資金」當作了「升級津貼」在條件判斷（Check）中抵用了，但是到了實際提款（Consume）環節，系統卻原封不動地向各大倉庫索了「原始不打折的全額費用」。
+   - 這個錯誤導致如果玩家的津貼加上國庫剛好可以買這個商品，系統允許他買，但最終提款時國庫發現沒這麼多錢，於是發生了「幽靈扣款現象」，部分物款被扣除但藍圖無效化的幽靈狀態。
+   - 已在提款執行層將 `actual_cost` 套用了津貼扣抵，精準只針對「差額」向國庫提領，確保了經濟系統的穩定。

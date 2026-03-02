@@ -163,7 +163,7 @@ func _on_day_passed(_current_day: int) -> void:
 
 ## 尝试由此建筑生成新人类
 func _try_spawn_human() -> void:
-	if _agent_manager != null and _agent_manager.agents.size() >= _agent_manager.get_max_population():
+	if _agent_manager != null and _agent_manager._current_population >= _agent_manager.get_max_population():
 		spawn_failed.emit("人口已达全局上限")
 		return
 
@@ -189,9 +189,9 @@ func _try_spawn_human() -> void:
 	var spawn_offset: Vector2 = Vector2(randf_range(-40, 40), randf_range(-40, 40))
 	var spawn_position: Vector2 = global_position + spawn_offset
 
-	var new_human: Node2D = _agent_manager.add_agent(spawn_position, 20, 30)
-	if new_human != null:
-		human_spawned.emit(new_human)
+	var new_idx: int = _agent_manager.add_agent(spawn_position, 20, 30)
+	if new_idx != -1:
+		# 修改了訊號傳遞，原本是要傳 Node2D，現在傳 Index，或者這裡的訊號只有印 log 沒有其他人聽
 		var b_name = get_node("/root/World/BuildingManager").get_building_data(building_type).get("name", "住所")
 		print("🏠 %s: 居民新生儿降生！消耗库存食物 %d" % [tr(b_name), FOOD_COST_PER_HUMAN])
 		get_tree().call_group("event_log", "add_log", "🏠 [%s] 迎接了一名新生命！" % tr(b_name), "#88ffaa")

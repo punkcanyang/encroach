@@ -101,11 +101,44 @@ func _try_select_object() -> void:
 			closest_dist = dist
 			found_object = child
 			
+	# 如果沒有點到建築，嘗試點擊 ECS Agent
+	if found_object == null:
+		var am = get_node_or_null("/root/World/AgentManager")
+		if am != null and am.has_method("get_agent_data_at"):
+			var base_radius = 20.0 # Agent 半徑較小
+			var check_radius = base_radius * zoom_factor
+			var nearest_idx = -1
+			
+			for i in range(am.agent_active.size()):
+				if am.agent_active[i] == 0: continue
+				var dist = am.agent_positions[i].distance_to(world_pos)
+				if dist < check_radius and dist < closest_dist:
+					closest_dist = dist
+					nearest_idx = i
+					
+			if nearest_idx != -1:
+				var data = am.get_agent_data_at(nearest_idx)
+				found_object = _create_mock_agent_node(data)
+			
 	building_selected.emit(found_object)
 	if found_object:
 		print("PlayerController: 选中了物件 -> ", found_object.name)
 	else:
 		print("PlayerController: 点击了空地，取消选中")
+
+func _create_mock_agent_node(data: Dictionary) -> Node2D:
+	var mock = Node2D.new()
+	var lf_years = int(data.get("lifespan_days", 0) / 365.0)
+	var age_years = int(data.get("age_days", 0) / 365.0)
+	var hp = int(data.get("hp", 0))
+	var max_hp = int(data.get("max_hp", 0))
+	var id = data.get("id", 0)
+	mock.name = "居民 #%d" % id
+	# 直接塞一個 get_status 方法給它
+	mock.set_script(preload("res://Scripts/Core/MockAgent.gd"))
+	if mock.has_method("setup"):
+		mock.setup(data)
+	return mock
 
 var _last_hovered: Node2D = null
 
@@ -134,7 +167,26 @@ func _try_hover_object() -> void:
 			closest_dist = dist
 			found_object = child
 			
+	if found_object == null:
+		var am = get_node_or_null("/root/World/AgentManager")
+		if am != null and am.has_method("get_agent_data_at"):
+			var base_radius = 20.0
+			var check_radius = base_radius * zoom_factor
+			var nearest_idx = -1
+			
+			for i in range(am.agent_active.size()):
+				if am.agent_active[i] == 0: continue
+				var dist = am.agent_positions[i].distance_to(world_pos)
+				if dist < check_radius and dist < closest_dist:
+					closest_dist = dist
+					nearest_idx = i
+					
+			if nearest_idx != -1:
+				var data = am.get_agent_data_at(nearest_idx)
+				found_object = _create_mock_agent_node(data)
+			
 	if found_object != _last_hovered:
+		# 不要一直 delete 上一個 Mock Node，交回給 GC 處理即可
 		_last_hovered = found_object
 		building_hovered.emit(found_object)
 
@@ -194,8 +246,18 @@ func upgrade_building(old_building: Node2D, next_type: int) -> void:
 	# 原址生成升阶蓝图，强制绕开碰撞检查，并关联旧建筑
 	var new_bp = _building_manager.place_building(next_type, target_pos, false, old_building)
 	if new_bp != null:
-		# 只有在蓝图实际成功放置时，才真实扣除花费
-		_consume_global_resources(cost_dict, storages)
+		# 修改扣款邏輯：先將舊建築的退還物資從花費清單中折抵掉
+		var actual_cost: Dictionary = cost_dict.duplicate()
+		if old_building.has_method("get_refund_resources"):
+			var refunds = old_building.get_refund_resources()
+			for r_type in refunds:
+				if actual_cost.has(r_type):
+					actual_cost[r_type] = max(0, actual_cost[r_type] - refunds[r_type])
+					if actual_cost[r_type] == 0:
+						actual_cost.erase(r_type)
+						
+		# 只有在蓝图实际成功放置时，才真实扣除折扣後的花费
+		_consume_global_resources(actual_cost, storages)
 		print("PlayerController: 成功放置升级蓝图并扣除了资源")
 	else:
 		push_warning("PlayerController: 蓝图放置发生碰撞等阻碍失败，幸好资源尚未扣除！")

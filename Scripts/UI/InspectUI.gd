@@ -304,6 +304,7 @@ func _on_upgrade_pressed(btn: Button) -> void:
 	if _selected_object == null or not is_instance_valid(_selected_object): return
 	if not "building_type" in _selected_object: return
 	
+	btn.disabled = true # 立即禁用，防止雙擊連發造成重複扣款
 	var next_type = btn.get_meta("upgrade_type")
 	if _player_controller != null and _player_controller.has_method("upgrade_building"):
 		_player_controller.upgrade_building(_selected_object, next_type)

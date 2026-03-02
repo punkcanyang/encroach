@@ -266,4 +266,26 @@
 
 ---
 
+## The Grand Migration (萬人同屏效能重構計畫)
+
+為了解決 100~1000 人時 Node2D 數量與 AI 決策 $O(N \times M)$ 帶來的卡頓，我們將遊戲架構全面升級為 **ECS-lite 資料導向與 `MultiMesh` 批次渲染**。
+
+- [ ] **Phase 1: 資料結構與渲染基石 (Data & Render Foundation)**
+  - [ ] 在 `AgentManager` 中定義內部 SoA / AoS 作為純資料容器以替代 `HumanAgent` Node。
+  - [ ] 實裝唯一的 `MultiMeshInstance2D` 以 1 Draw Call 渲染全體小人。
+  - [ ] 改寫 `add_agent`，僅注入資料而不實體化 Node2D。
+- [ ] **Phase 2: 核心生命週期重植 (Life Cycle Migration)**
+  - [ ] 搬移飢餓、扣血、老死判斷至單一的高速迴圈中統一結算。
+  - [ ] 實裝陣列的新增與移除防護。
+- [ ] **Phase 3: 狀態機與位移重植 (FSM & Movement Migration)**
+  - [ ] 實裝狀態轉換（尋找資源、前往、採集、回庫、存入）。
+  - [ ] 將位移直接映射至 `MultiMesh` Transform。
+  - [ ] 加入目標快取機制，廢除每幀全圖遍歷。
+- [ ] **Phase 4: UI 互動與舊系統適應 (UI & Deps Restoration)**
+  - [ ] 使用距離演算法（Raycast to Proximity）重構滑鼠點擊選擇，不再依賴 Area2D。
+  - [ ] 替換 `Residence` 與 `InspectUI` 中的假 Node Dictionary 依賴。
+  - [ ] 確保全局日誌與生產掉落正常觸發。
+
+---
+
 *最后更新: 2026-03-01*

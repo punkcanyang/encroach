@@ -197,7 +197,8 @@ func _setup_connections() -> void:
 				_agent_manager.agent_added.connect(_on_agent_changed)
 			if _agent_manager.has_signal("agent_removed"):
 				_agent_manager.agent_removed.connect(_on_agent_changed)
-			_current_population = _agent_manager.agents.size()
+			# ECS-Lite: AgentManager 不再使用 `agents` 陣列，改用 `_current_population`
+			_current_population = _agent_manager._current_population
 
 	# ResourceManager & Cave
 	var world_node = get_tree().root.get_node_or_null("World")
@@ -232,7 +233,7 @@ func _on_day_passed(day: int) -> void:
 
 func _on_agent_changed(_agent: Node2D = null) -> void:
 	if _agent_manager:
-		_current_population = _agent_manager.agents.size()
+		_current_population = _agent_manager._current_population
 	_update_displays()
 
 

@@ -200,9 +200,9 @@ func _generate_initial_human(cave_position: Vector2) -> void:
 	var offset: Vector2 = Vector2(randf_range(-30, 30), randf_range(-30, 30))
 	var pos: Vector2 = cave_position + offset
 	
-	var human: Node2D = _agent_manager.add_agent(pos)
-	if human != null:
-		print("WorldGenerator: 初始人类已生成在 %s" % str(pos))
+	var human_idx: int = _agent_manager.add_agent(pos)
+	if human_idx >= 0:
+		print("WorldGenerator: 初始人类已生成在 %s (ID: %d)" % [str(pos), human_idx])
 
 
 func _setup_camera(position: Vector2) -> void:
