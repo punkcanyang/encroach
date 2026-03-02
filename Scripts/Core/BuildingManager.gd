@@ -11,6 +11,14 @@ signal building_placed(building: Node2D)
 signal building_removed(building: Node2D)
 signal blueprint_placed(blueprint: Node2D)
 
+## 网格系统常量
+const GRID_SIZE: float = 20.0
+
+## 将世界坐标吸附到网格中心
+func snap_to_grid(pos: Vector2) -> Vector2:
+	return pos.snapped(Vector2(GRID_SIZE, GRID_SIZE))
+
+
 
 ## 建筑类型枚举
 enum BuildingType {
@@ -167,10 +175,9 @@ func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 			print(" BuildingManager[Collision]: 越界，候选 %s 不在世界 %s 范围内" % [str(rect), str(world_rect)])
 			return true
 	
-	# 如果是原址升级，使用老建筑的体积作为碰撞核查依据，从而提供体积膨胀宽容度，避免原址被卡死无法升级
+	# 【網格重構】捨棄舊有容錯機制，一律使用「新建築藍圖的真實體積 (rect)」進行精確的空間查核
+	# 如果是原址升級，下方迴圈會因為 `entity == ignore_node` 自行跳過對舊建築的重疊報錯
 	var test_rect: Rect2 = rect
-	if ignore_node != null and is_instance_valid(ignore_node):
-		test_rect = _get_entity_rect(ignore_node)
 	
 	# 检查与其他建筑的碰撞
 	for entity in buildings + blueprints:
@@ -184,10 +191,14 @@ func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 	# 检查与山洞的碰撞
 	var cave = _world.get_node_or_null("Cave")
 	if cave != null and cave != ignore_node and is_instance_valid(cave):
-		var cave_rect: Rect2 = _get_entity_rect(cave)
-		if test_rect.intersects(cave_rect):
-			print(" BuildingManager[Collision]: 与山洞重叠 -> (位置: %s, 大小: %s)" % [str(cave_rect.position), str(cave_rect.size)])
-			return true
+		# 如果是原址升級，且此山洞跟我們完全同一個座標，這絕對是舊存檔殘留的「幽靈山洞」，忽略它並強制清理
+		if ignore_node != null and cave.global_position.distance_to(ignore_node.global_position) < 5.0:
+			cave.queue_free()
+		else:
+			var cave_rect: Rect2 = _get_entity_rect(cave)
+			if test_rect.intersects(cave_rect):
+				print(" BuildingManager[Collision]: 与山洞重叠 -> (位置: %s, 大小: %s)" % [str(cave_rect.position), str(cave_rect.size)])
+				return true
 			
 	# 检查与野生资源的碰撞 (假设大小大概 10x10)
 	var resources = get_tree().get_nodes_in_group("inspectable")
@@ -195,6 +206,10 @@ func check_collision(rect: Rect2, ignore_node: Node2D = null) -> bool:
 		if res == ignore_node or not is_instance_valid(res):
 			continue
 		if res.has_method("collect") and not res.name.begins_with("Human"):
+			# ================== 修復：現在建築也有 collect，必須排除它們 ==================
+			if res.is_in_group("building") or res.name == "Cave":
+				continue
+				
 			# 这是个野生资源
 			var res_rect: Rect2 = Rect2(res.global_position - Vector2(10, 10), Vector2(20, 20))
 			if test_rect.intersects(res_rect):
@@ -329,6 +344,9 @@ func remove_building(building: Node2D) -> void:
 		building.queue_free()
 	elif building in blueprints:
 		blueprints.erase(building)
+		building.queue_free()
+	elif is_instance_valid(building) and (building.name == "Cave" or building.is_in_group("building")):
+		# 防禦性清理：像是初始生成的 Cave 可能不在此類的陣列中，也必須強制銷毀
 		building.queue_free()
 
 

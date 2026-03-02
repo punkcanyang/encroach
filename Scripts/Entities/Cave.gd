@@ -206,7 +206,7 @@ func _on_day_passed(_current_day: int) -> void:
 
 ## 尝试生成新人类
 func _try_spawn_human() -> void:
-	if _agent_manager != null and _agent_manager.agents.size() >= get_max_population():
+	if _agent_manager != null and _agent_manager._current_population >= get_max_population():
 		spawn_failed.emit("人口已达全局上限 (%d)" % get_max_population())
 		print("🏠 Cave: 繁殖周期到达，但人口已达上限 %d，暂停繁殖" % get_max_population())
 		return
@@ -229,9 +229,9 @@ func _try_spawn_human() -> void:
 	var spawn_offset: Vector2 = Vector2(randf_range(-30, 30), randf_range(-30, 30))
 	var spawn_position: Vector2 = global_position + spawn_offset
 
-	var new_human: Node2D = _agent_manager.add_agent(spawn_position, 20, 30)
-	if new_human != null:
-		human_spawned.emit(new_human)
+	var new_human_id: int = _agent_manager.add_agent(spawn_position, 20, 30)
+	if new_human_id >= 0:
+		human_spawned.emit()
 		print("🏠 Cave: 新人类已生成！消耗食物 %d，剩余 %d/%d" % [
 			FOOD_COST_PER_HUMAN, storage[ResourceTypes.Type.FOOD], get_max_storage_per_type(ResourceTypes.Type.FOOD)
 		])
@@ -383,6 +383,19 @@ func finish_construction() -> void:
 		if manager != null and manager.has_method("finalize_blueprint"):
 			manager.finalize_blueprint(self )
 		queue_redraw()
+
+## 藍圖鴨子類型介面：被 Agent 敲擊時呼叫
+func collect(requested_amount: int, _collector: Node) -> int:
+	if is_blueprint:
+		add_progress(10.0)
+		return 0 # 返回 0 意味著作為資源是空的，但在這之前已經推進了進度
+	return 0
+
+## 藍圖鴨子類型介面：判斷是否可作為資源點
+func is_depleted() -> bool:
+	if is_blueprint:
+		return false # 藍圖需要施工，不能視為已空
+	return true # 作為採集來源，完工的山洞不能提供礦產或食物
 
 ## 取得拆除 / 升級原址取代時，可返還與折抵的總資源
 func get_refund_resources() -> Dictionary:

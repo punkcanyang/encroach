@@ -41,6 +41,9 @@ func _process(_delta: float) -> void:
 	# 如果在建造模式，更新预览位置和验证状态
 	if current_build_type != -1 and _camera != null and _building_manager != null:
 		var mouse_pos = _camera.get_global_mouse_position()
+		if _building_manager.has_method("snap_to_grid"):
+			mouse_pos = _building_manager.snap_to_grid(mouse_pos)
+			
 		var data = _building_manager.get_building_data(current_build_type)
 		var size = data.get("size", Vector2(40, 40))
 		
@@ -208,6 +211,8 @@ func _try_place_building() -> void:
 		return
 	
 	var mouse_pos = _camera.get_global_mouse_position()
+	if _building_manager != null and _building_manager.has_method("snap_to_grid"):
+		mouse_pos = _building_manager.snap_to_grid(mouse_pos)
 	
 	var blueprint = _building_manager.place_building(current_build_type, mouse_pos, false)
 	
@@ -242,6 +247,8 @@ func upgrade_building(old_building: Node2D, next_type: int) -> void:
 		return
 		
 	var target_pos = old_building.global_position
+	if _building_manager.has_method("snap_to_grid"):
+		target_pos = _building_manager.snap_to_grid(target_pos)
 	
 	# 原址生成升阶蓝图，强制绕开碰撞检查，并关联旧建筑
 	var new_bp = _building_manager.place_building(next_type, target_pos, false, old_building)

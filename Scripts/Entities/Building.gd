@@ -112,6 +112,19 @@ func finish_construction() -> void:
 		_on_construction_finished()
 		queue_redraw()
 
+## 蓝图鸭子类型接口：被 Agent 敲打时调用
+func collect(requested_amount: int, _collector: Node) -> int:
+	if is_blueprint:
+		add_progress(10.0)
+		return 0 # 返回 0 意味着没有资源可以抱走，但施工进度已经增加了
+	return 0
+
+## 蓝图鸭子类型接口：供 Agent 雷达验证状态
+func is_depleted() -> bool:
+	if is_blueprint:
+		return false # 施工中的蓝图不能被视为无效点
+	return true # 竣工的建筑本体不提供资源采集
+
 
 ## 子类可重写的回调
 func _on_construction_finished() -> void:
@@ -188,6 +201,31 @@ func get_status() -> Dictionary:
 		status["name"] = "BUILDING_UNKNOWN"
 		
 	return status
+
+
+## 取得拆除 / 升級原址取代時，可返還與折抵的總資源
+func get_refund_resources() -> Dictionary:
+	var refunds = {}
+	
+	# 返還內部倉庫的所有材料
+	for type in storage:
+		if storage[type] > 0:
+			refunds[type] = storage[type]
+			
+	# 返還造價的 50% 作為建材津貼
+	var manager = get_node_or_null("/root/World/BuildingManager")
+	if manager != null and manager.has_method("get_building_data"):
+		var data = manager.get_building_data(building_type)
+		var cost_dict = data.get("cost", {})
+		for type in cost_dict:
+			var half_cost = int(floor(cost_dict[type] * 0.5))
+			if half_cost > 0:
+				if refunds.has(type):
+					refunds[type] += half_cost
+				else:
+					refunds[type] = half_cost
+					
+	return refunds
 
 
 # [For Future AI]

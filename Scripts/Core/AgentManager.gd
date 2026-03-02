@@ -591,6 +591,7 @@ func _find_nearest_resource_for_agent(idx: int, world: Node, candidates: Array, 
 		if is_bp: max_allowed = 3
 		if current_reservations >= max_allowed: continue
 		
+		# ===== 致命的過濾 Bug 發生在這裡 =====
 		if not is_bp:
 			if not has_space.get(res_type, false): continue
 			if res_type != ResourceTypes.Type.FOOD and not can_collect_non_food: continue
@@ -625,10 +626,20 @@ func _collect_resource_for_agent(idx: int, candidates: Array) -> void:
 	var pos = agent_positions[idx]
 	var target_node = null
 	for child in candidates:
-		if is_instance_valid(child) and child.global_position.distance_to(pos) < 15.0:
-			target_node = child
-			break
-			
+		if is_instance_valid(child):
+			var reach = 15.0
+			var is_bp = child.is_blueprint if "is_blueprint" in child else false
+			# 建築體積龐大，不能用 15.0 這種原點距離，否則永遠摸不到
+			if is_bp or child.is_in_group("building") or child.name == "Cave":
+				reach = 60.0
+				
+			if child.global_position.distance_to(pos) < reach:
+				# ====== 修復：當升級時，新藍圖與舊建築重疊，必須優先敲擊藍圖 ======
+				if target_node == null:
+					target_node = child
+				elif is_bp and not (target_node.is_blueprint if "is_blueprint" in target_node else false):
+					target_node = child
+					
 	if target_node == null:
 		agent_states[idx] = 0 # IDLE
 		return

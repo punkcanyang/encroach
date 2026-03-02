@@ -139,6 +139,9 @@ func _generate_cave(position: Vector2) -> void:
 	
 	var cave: Node2D = cave_scene.instantiate()
 	cave.name = "Cave"
+	var bm = get_node_or_null("/root/World/BuildingManager")
+	if bm != null and bm.has_method("snap_to_grid"):
+		position = bm.snap_to_grid(position)
 	cave.position = position
 	_world.add_child(cave)
 	
@@ -163,6 +166,9 @@ func _generate_typed_resources(
 	
 	for i in range(count):
 		var pos: Vector2 = _get_safe_position(cave_position)
+		var bm = get_node_or_null("/root/World/BuildingManager")
+		if bm != null and bm.has_method("snap_to_grid"):
+			pos = bm.snap_to_grid(pos)
 		
 		var resource: Node2D = resource_scene.instantiate()
 		resource.position = pos

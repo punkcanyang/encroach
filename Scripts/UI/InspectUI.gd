@@ -35,6 +35,8 @@ var _player_controller: Node = null
 var _is_pinned: bool = false
 
 var _init_print_done = false
+var _update_timer: float = 0.0
+const UPDATE_INTERVAL: float = 0.1 # 限制更新频率为每秒 10 次，避免 RichTextLabel 每帧 parse_bbcode 导致渲染崩溃
 
 func _ready() -> void:
 	print("InspectUI: _ready is called")
@@ -117,8 +119,17 @@ func _on_building_selected(target: Node2D) -> void:
 		_is_pinned = false
 		return
 		
+	if _selected_object == target:
+		# 點擊相同物件，切換釘選狀態
+		_is_pinned = not _is_pinned
+		if not _is_pinned:
+			_info_panel.visible = false
+			_selected_object = null
+		return
+		
 	_selected_object = target
 	_is_pinned = true
+	_update_timer = 0.0 # 重置计时器
 	_update_inspect_content()
 	_info_panel.visible = true
 
@@ -134,6 +145,7 @@ func _on_building_hovered(target: Node2D) -> void:
 		return
 		
 	_selected_object = target
+	_update_timer = 0.0 # 重置计时器
 	_update_inspect_content()
 	if not _info_panel.visible:
 		_info_panel.visible = true
@@ -161,7 +173,10 @@ func _process(_delta: float) -> void:
 			
 	# 定期刷新数据（当面板开着的时候）
 	if _info_panel.visible and is_instance_valid(_selected_object):
-		_update_inspect_content()
+		_update_timer += _delta
+		if _update_timer >= UPDATE_INTERVAL:
+			_update_timer = 0.0
+			_update_inspect_content()
 	elif _info_panel.visible and not is_instance_valid(_selected_object):
 		# 对象被销毁销毁了
 		_on_close_pressed()
